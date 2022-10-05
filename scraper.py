@@ -1,5 +1,6 @@
 import json
 import re
+from parser import atom_parse
 
 from requests import Session
 
@@ -11,6 +12,7 @@ FETCHED = []
 import urllib3
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+import urllib.parse
 
 
 class LiveServerSession(Session):
@@ -22,8 +24,11 @@ class LiveServerSession(Session):
         self.headers.update(headers)
 
     def request(self, method, url, *args, **kwargs):
+        if "params" in kwargs:
+            # Avoid encoding
+            # https://stackoverflow.com/a/23497912/2131871
+            kwargs["params"] = urllib.parse.urlencode(kwargs["params"], safe=":+")
         url = self.prefix_url + url  # urljoin(self.prefix_url, url)
-        print(args, kwargs)
         return super(LiveServerSession, self).request(
             method, url, *args, **kwargs, verify=False
         )
@@ -58,6 +63,9 @@ class Crawler:
             print(err)
             print(err.response.text)
             raise
+
+        if self.config.format == "atom:1.0":
+            return atom_parse(response.text)
         return response.json()
 
 
@@ -114,9 +122,12 @@ class Listing(Crawler):
     def run(self):
         cursor = None
 
-        for _ in range(0, 3):  # Testing purpose
+        for ind in range(0, 3):  # Testing purpose
             response = self._fetch_list(cursor)
-            cursor = deep_get(response, self.config.pagination.ref)
+            if hasattr(self.config.pagination, "ref"):
+                cursor = deep_get(response, self.config.pagination.ref)
+            else:
+                cursor = (1 + ind) * self.config.pagination.step
             if not cursor:
                 break
             yield response
