@@ -122,7 +122,7 @@ class Listing(Crawler):
     def run(self):
         cursor = getattr(self.config.pagination, "default", None)
 
-        for ind in range(0, 3):  # Testing purpose
+        for ind in range(1, 3):  # Testing purpose
             response = self._fetch_list(cursor)
             if hasattr(self.config.pagination, "ref"):
                 cursor = deep_get(response, self.config.pagination.ref)
@@ -156,27 +156,6 @@ class Slicing(Listing):
             raise Exception('Request params should be "dict" or "str"')
 
         return super(Slicing, self).run()
-
-
-class Search(Crawler):
-    def run(self):
-        response = self._fetch(url=self.config.request.url)
-        results = deep_get(response, self.config.key)
-        for result in results:
-            FETCHED.append((self.config.name, result))
-        yield from results
-
-
-# class Listing(Crawler):
-#     # start_cursor: next_cursor
-
-#     def run(self):
-#         for value in range(0, 3):  # SAFER While True
-#             result = self._fetch(
-#                 value,
-#             )
-#             FETCHED.append((self.config.name, result))
-#             yield result
 
 
 class DirectFetch(Crawler):
