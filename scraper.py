@@ -42,22 +42,13 @@ class Crawler:
     def run():
         yield
 
-    def _fetch(self, url, **kwargs):
+    def _fetch(self, **attributes):
         method = getattr(
             self.config, "method", "GET"
         )  # TO HAVE IT EXPLICITELY IN CONFIG
-        if kwargs:
-            attributes = kwargs
-        else:
-            attributes = getattr(self.config, "request", None)
-            if attributes:
-                attributes = attributes.dict()
-            else:
-                attributes = {}
-
         try:
-            print(method, url, kwargs)
-            response = self.session.request(method, url, **attributes)
+            print(method, attributes)
+            response = self.session.request(method, **attributes)
             response.raise_for_status()
         except Exception as err:
             print(err)
@@ -78,8 +69,8 @@ class Looping(Crawler):
         for ind, value in enumerate(range(max_value, 0, -1)):
             if ind > 2:
                 break  # Testing purpose
-            url = self.config.path.format(value)
-            result = self._fetch(url)
+            url = self.config.request.url.format(value)
+            result = self._fetch(url=url)
             FETCHED.append((self.config.name, result))
             yield result
 
@@ -97,7 +88,7 @@ class List(Crawler):
     """Listing without pagination"""
 
     def run(self):
-        response = self._fetch(self.config.path)
+        response = self._fetch(url=self.config.request.url)
         results = deep_get(response, self.config.key)
         for result in results:
             FETCHED.append((self.config.name, result))
@@ -112,15 +103,23 @@ class Listing(Crawler):
         request_attributes = getattr(self.config, "request", PropertyTree()).dict()
         if hasattr(self.config, "pagination") and cursor is not None:
             type = self.config.pagination.type
-            request_attributes[type][self.config.pagination.key] = cursor
-        response = self._fetch(self.config.path, **request_attributes)
+            if isinstance(request_attributes[type], dict):
+                request_attributes[type][self.config.pagination.key] = cursor
+            elif isinstance(request_attributes[type], str):
+                request_attributes[type] = request_attributes[type].format(
+                    cursor=cursor
+                )
+            else:
+                raise Exception('Request params should be "dict" or "str"')
+
+        response = self._fetch(**request_attributes)
         results = deep_get(response, self.config.key)
         for result in results:
             FETCHED.append((self.config.name, result))
         return response
 
     def run(self):
-        cursor = None
+        cursor = getattr(self.config.pagination, "default", None)
 
         for ind in range(0, 3):  # Testing purpose
             response = self._fetch_list(cursor)
@@ -133,9 +132,42 @@ class Listing(Crawler):
             yield response
 
 
+# class Slicing(Crawler):
+#     """Listing with interval"""
+
+#     start = datetime(1900, 1, 1)
+#     end = datetime.now()
+
+#     def _fetch_list(self, cursor=None):
+#         # if pagination
+#         request_attributes = getattr(self.config, "request", PropertyTree()).dict()
+#         if hasattr(self.config, "pagination") and cursor is not None:
+#             type = self.config.pagination.type
+#             request_attributes[type][self.config.pagination.key] = cursor
+#         request_attributes["url"] = self.config.request.url
+#         response = self._fetch(**request_attributes)
+#         results = deep_get(response, self.config.key)
+#         for result in results:
+#             FETCHED.append((self.config.name, result))
+#         return response
+
+#     def run(self):
+#         cursor = getattr(self.config.pagination, "default", None)
+
+#         for ind in range(0, 3):  # Testing purpose
+#             response = self._fetch_list(cursor)
+#             if hasattr(self.config.pagination, "ref"):
+#                 cursor = deep_get(response, self.config.pagination.ref)
+#             else:
+#                 cursor = (1 + ind) * self.config.pagination.step
+#             if not cursor:
+#                 break
+#             yield response
+
+
 class Search(Crawler):
     def run(self):
-        response = self._fetch(self.config.path)
+        response = self._fetch(url=self.config.request.url)
         results = deep_get(response, self.config.key)
         for result in results:
             FETCHED.append((self.config.name, result))
@@ -159,9 +191,10 @@ class DirectFetch(Crawler):
         # Scan for task
         for name, result in FETCHED:
             if self.config.id.entity == name:
+                # HN sent null some times... ?
                 value = result[self.config.id.key]
-                url = self.config.path.format(value)
-                result = self._fetch(url)
+                url = self.config.request.url.format(value)
+                result = self._fetch(url=url)
                 FETCHED.append((self.config.name, result))
                 yield result
 
@@ -175,12 +208,15 @@ def type2class(type):
         return Listing
     elif type == "Search":
         return Search
+    elif type == "Slicing":
+        return Slicing
     else:
         raise NotImplementedError
 
 
 def runner(config):
     config = dict_to_obj_tree(config)
+    print("HOST", config.host)
     session = LiveServerSession(config.host, headers=config.select("headers", {}))
 
     crawlers = []

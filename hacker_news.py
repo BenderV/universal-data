@@ -5,9 +5,12 @@ CONFIG = {
     "entities": [
         {
             "name": "Item",
+            "format": "json",
             "type": "Looping",
-            "path": "/item/{0}.json",
             # "schema": {"by": {"relation": "User", "key": "id"}},
+            "request": {
+                "url": "/item/{0}.json",
+            },
             "max_value": {
                 "type": "Int",
                 "url": "/maxitem.json",
@@ -16,11 +19,15 @@ CONFIG = {
         },
         {
             "name": "User",
+            "format": "json",
             "type": "DirectFetch",
-            "path": "/user/{0}.json",
+            "request": {
+                "url": "/user/{0}.json",
+            },
             "id": {"entity": "Item", "key": "by"},
         },
     ],
 }
 
-scraper.runner(CONFIG)
+if __name__ == "__main__":
+    scraper.runner(CONFIG)

@@ -12,16 +12,16 @@ CONFIG = {
             "name": "Articles",
             "format": "atom:1.0",
             "type": "Listing",
-            "path": "/query",
             "key": "entries",
             "method": "GET",
             "request": {
+                "url": "/query",
                 "params": {
                     "max_results": 2,  # default
                     "search_query": "cat:cs.CV+OR+cat:cs.LG+OR+cat:cs.CL+OR+cat:cs.AI+OR+cat:cs.NE+OR+cat:cs.RO",  # ⚠️ it's mandatory
                     "sortBy": "lastUpdatedDate",
                     "sortOrder": "descending",
-                }
+                },
             },
             "pagination": {
                 "step": 2,  # should be len(result) ?
@@ -32,4 +32,6 @@ CONFIG = {
     ],
 }
 
-scraper.runner(CONFIG)
+
+if __name__ == "__main__":
+    scraper.runner(CONFIG)

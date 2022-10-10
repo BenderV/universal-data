@@ -12,11 +12,12 @@ CONFIG = {
     "entities": [
         {
             "name": "User",
+            "format": "json",
             "type": "Listing",
-            "path": "/users",
             "key": "results",
             "method": "GET",
             "request": {
+                "url": "/users",
                 "params": {
                     "page_size": 1,
                 },
@@ -29,18 +30,19 @@ CONFIG = {
         },
         {
             "name": "Pages",
+            "format": "json",
             "type": "Listing",
-            "path": "/search",
             "key": "results",
             "method": "POST",
             "request": {
+                "url": "/search",
                 "json": {
                     "page_size": 2,
                     "sort": {
                         "direction": "ascending",
                         "timestamp": "last_edited_time",
                     },
-                }
+                },
             },
             "pagination": {
                 "ref": "next_cursor",
@@ -51,4 +53,5 @@ CONFIG = {
     ],
 }
 
-scraper.runner(CONFIG)
+if __name__ == "__main__":
+    scraper.runner(CONFIG)
