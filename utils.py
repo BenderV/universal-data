@@ -1,4 +1,5 @@
 import json
+import re
 from functools import reduce
 from typing import Any, Dict
 
@@ -49,3 +50,17 @@ def deep_get(dictionary, keys, default=None):
         keys.split("."),
         dictionary,
     )
+
+
+def partial_format(s, **kwargs):
+    """
+    https://stackoverflow.com/a/63924089
+    """
+    parts = re.split(r"(\{[^}]*\})", s)
+    for k, v in kwargs.items():
+        for idx, part in enumerate(parts):
+            if re.match(
+                rf"\{{{k}[!:}}]", part
+            ):  # Placeholder keys must always be followed by '!', ':', or the closing '}'
+                parts[idx] = parts[idx].format_map({k: v})
+    return "".join(parts)

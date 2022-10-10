@@ -10,13 +10,15 @@ It's similar to a search method
 
 * Largest interval possible
 
-#### Result Limit (no pagination)
-The response can't contain "X" number of result and so the pagination should reflect that.
-
-* Large interval to small 
-
 #### Unordered (pagination + no order)
 The response have pagination but it's not ordered so we may want to have smaller interval
 
 * Stock => maximum
 * Flux => from last time only
+
+
+#### Result Limit (no pagination)
+The response can't contain "X" number of result and so the pagination should reflect that.
+
+* Large interval to small 
+

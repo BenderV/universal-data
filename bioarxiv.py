@@ -10,26 +10,40 @@ CONFIG = {
     "host": "https://api.biorxiv.org",
     "entities": [
         {
-            "name": "Articles",
+            "name": "Biorxiv Articles",
+            "entity": "articles",
             "format": "json",
-            "type": "Listing",
-            # "variant": {
-            #     "server": ["bioarxiv", "medrxiv"],
-            # },
+            "type": "Slicing",
             "key": "collection",
-            # "date_format": "YYYY-MM-DD",
             "method": "GET",
             "request": {
-                "url": "/pubs/biorxiv/1900-01-01/2022-10-10/{cursor}/json",
-                # "url": "/pubs/bioarxiv/{from}-{to}/{cursor}/json",
-                # "server": 2,  # default
-                # "from": "2020-03-01",
-                # "to": "2021-03-01",
-                # "to": {
-                #     "_value": ..
-                #     "_format": ..
-                # ... ?
-                # }
+                "url": "/pubs/biorxiv/{from_date}/{to_date}/{cursor}/json",
+            },
+            "slice": {
+                "date_format": "%Y-%m-%d",
+                "type": "url",
+            },
+            "pagination": {
+                "default": 0,
+                "step": 100,
+                # "ref": "collection",  # collection, so we will take len(collection)
+                "key": "cursor",
+                "type": "url",
+            },
+        },
+        {
+            "name": "Medrxiv Articles",
+            "entity": "articles",
+            "format": "json",
+            "type": "Slicing",
+            "key": "collection",
+            "method": "GET",
+            "request": {
+                "url": "/pubs/medrxiv/{from_date}/{to_date}/{cursor}/json",
+            },
+            "slice": {
+                "date_format": "%Y-%m-%d",
+                "type": "url",
             },
             "pagination": {
                 "default": 0,

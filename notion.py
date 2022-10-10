@@ -12,6 +12,7 @@ CONFIG = {
     "entities": [
         {
             "name": "User",
+            "entity": "users",
             "format": "json",
             "type": "Listing",
             "key": "results",
@@ -30,6 +31,7 @@ CONFIG = {
         },
         {
             "name": "Pages",
+            "entity": "pages",
             "format": "json",
             "type": "Listing",
             "key": "results",

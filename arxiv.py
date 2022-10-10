@@ -10,6 +10,7 @@ CONFIG = {
     "entities": [
         {
             "name": "Articles",
+            "entity": "articles",
             "format": "atom:1.0",
             "type": "Listing",
             "key": "entries",

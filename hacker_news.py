@@ -5,6 +5,7 @@ CONFIG = {
     "entities": [
         {
             "name": "Item",
+            "entity": "item",
             "format": "json",
             "type": "Looping",
             # "schema": {"by": {"relation": "User", "key": "id"}},

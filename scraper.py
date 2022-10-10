@@ -1,10 +1,11 @@
 import json
 import re
+from datetime import datetime
 from parser import atom_parse
 
 from requests import Session
 
-from utils import PropertyTree, deep_get, dict_to_obj_tree
+from utils import PropertyTree, deep_get, dict_to_obj_tree, partial_format
 
 FETCHED = []
 
@@ -132,37 +133,29 @@ class Listing(Crawler):
             yield response
 
 
-# class Slicing(Crawler):
-#     """Listing with interval"""
+class Slicing(Listing):
+    """Slice with date"""
 
-#     start = datetime(1900, 1, 1)
-#     end = datetime.now()
+    from_date = datetime(1900, 1, 1)
+    to_date = datetime.now()
 
-#     def _fetch_list(self, cursor=None):
-#         # if pagination
-#         request_attributes = getattr(self.config, "request", PropertyTree()).dict()
-#         if hasattr(self.config, "pagination") and cursor is not None:
-#             type = self.config.pagination.type
-#             request_attributes[type][self.config.pagination.key] = cursor
-#         request_attributes["url"] = self.config.request.url
-#         response = self._fetch(**request_attributes)
-#         results = deep_get(response, self.config.key)
-#         for result in results:
-#             FETCHED.append((self.config.name, result))
-#         return response
+    def format_date(self, date):
+        return date.strftime(self.config.slice.date_format)
 
-#     def run(self):
-#         cursor = getattr(self.config.pagination, "default", None)
+    def run(self):
+        request_attributes = getattr(self.config, "request", PropertyTree()).dict()
+        params = self.config.slice
+        if isinstance(request_attributes[params.type], str):
+            request_attributes[params.type] = partial_format(
+                request_attributes[params.type],
+                from_date=self.format_date(self.from_date),
+                to_date=self.format_date(self.to_date),
+            )
+            self.config.request = dict_to_obj_tree(request_attributes)
+        else:
+            raise Exception('Request params should be "dict" or "str"')
 
-#         for ind in range(0, 3):  # Testing purpose
-#             response = self._fetch_list(cursor)
-#             if hasattr(self.config.pagination, "ref"):
-#                 cursor = deep_get(response, self.config.pagination.ref)
-#             else:
-#                 cursor = (1 + ind) * self.config.pagination.step
-#             if not cursor:
-#                 break
-#             yield response
+        return super(Slicing, self).run()
 
 
 class Search(Crawler):
