@@ -3,8 +3,6 @@ import re
 from functools import reduce
 from typing import Any, Dict
 
-# add defaultdict ?
-
 
 class PropertyTree:
     def __repr__(self):

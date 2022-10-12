@@ -1,19 +1,23 @@
 import json
-import re
+import logging
+from collections import defaultdict
 from datetime import datetime
 from parser import atom_parse
 
 from requests import Session
 
+from move import transfert
 from utils import PropertyTree, deep_get, dict_to_obj_tree, partial_format
 
-FETCHED = []
+FETCHED = defaultdict(list)
 
 
 import urllib3
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 import urllib.parse
+
+logging.basicConfig(level=logging.DEBUG)
 
 
 class LiveServerSession(Session):
@@ -48,12 +52,12 @@ class Crawler:
             self.config, "method", "GET"
         )  # TO HAVE IT EXPLICITELY IN CONFIG
         try:
-            print(method, attributes)
+            logging.debug(method, attributes)
             response = self.session.request(method, **attributes)
             response.raise_for_status()
         except Exception as err:
-            print(err)
-            print(err.response.text)
+            logging.error(err)
+            logging.error(err.response.text)
             raise
 
         if self.config.format == "atom:1.0":
@@ -66,13 +70,13 @@ class Looping(Crawler):
 
     def run(self):
         max_value = self._fetch_max_value()
-        print(max_value)  # TODO: to save
+        logging.debug("max_value", max_value)  # TODO: to save
         for ind, value in enumerate(range(max_value, 0, -1)):
             if ind > 2:
                 break  # Testing purpose
             url = self.config.request.url.format(value)
             result = self._fetch(url=url)
-            FETCHED.append((self.config.name, result))
+            FETCHED[self.config.entity].append(result)
             yield result
 
     def _fetch_value(self, data, path):
@@ -92,7 +96,7 @@ class List(Crawler):
         response = self._fetch(url=self.config.request.url)
         results = deep_get(response, self.config.key)
         for result in results:
-            FETCHED.append((self.config.name, result))
+            FETCHED[self.config.entity].append(result)
         return response
 
 
@@ -116,7 +120,7 @@ class Listing(Crawler):
         response = self._fetch(**request_attributes)
         results = deep_get(response, self.config.key)
         for result in results:
-            FETCHED.append((self.config.name, result))
+            FETCHED[self.config.entity].append(result)
         return response
 
     def run(self):
@@ -161,13 +165,13 @@ class Slicing(Listing):
 class DirectFetch(Crawler):
     def run(self):
         # Scan for task
-        for name, result in FETCHED:
+        for name, result in FETCHED.items():
             if self.config.id.entity == name:
                 # HN sent null some times... ?
                 value = result[self.config.id.key]
                 url = self.config.request.url.format(value)
                 result = self._fetch(url=url)
-                FETCHED.append((self.config.name, result))
+                FETCHED[self.config.entity].append(result)
                 yield result
 
 
@@ -178,8 +182,6 @@ def type2class(type):
         return DirectFetch
     elif type == "Listing":
         return Listing
-    elif type == "Search":
-        return Search
     elif type == "Slicing":
         return Slicing
     else:
@@ -188,7 +190,7 @@ def type2class(type):
 
 def runner(config):
     config = dict_to_obj_tree(config)
-    print("HOST", config.host)
+    logging.debug(f"host: {config.host}")
     session = LiveServerSession(config.host, headers=config.select("headers", {}))
 
     crawlers = []
@@ -197,11 +199,15 @@ def runner(config):
         crawlers.append(crawler)
 
     for crawler in crawlers:
-        print("Run Crawnler", crawler.config.name)
+        logging.debug(f"Run Crawnler: {crawler.config.name}")
         for result in crawler.run():
             pass
 
-    print(FETCHED)
+    logging.debug(FETCHED)
+    # for name, rows in FETCHED.items():
+    #    transfert(name, rows, "id")
+    with open("output.json", "w") as f:
+        json.dump(FETCHED, f)
 
 
 # Handle response

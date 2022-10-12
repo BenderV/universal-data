@@ -1,10 +1,19 @@
-import scraper
-from arxiv import CONFIG as ARXIV_CONFIG
-from bioarxiv import CONFIG as BIOARXIV_CONFIG
-from hacker_news import CONFIG as HN_CONFIG
-from notion import CONFIG as NOTION_CONFIG
+import argparse
 
-scraper.runner(ARXIV_CONFIG)
-scraper.runner(BIOARXIV_CONFIG)
-scraper.runner(HN_CONFIG)
-scraper.runner(NOTION_CONFIG)
+import yaml
+
+import scraper
+
+
+def run(config):
+    print(config)
+    scraper.runner(config)
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("file", type=argparse.FileType("r"))
+    args = parser.parse_args()
+    with open(args.file.name) as f:
+        config = yaml.safe_load(f)
+    run(config)
