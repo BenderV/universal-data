@@ -10,10 +10,15 @@ class PropertyTree:
 
     def dict(self):
         """apply recursively on all properties"""
-        return {
-            k: v.dict() if isinstance(v, PropertyTree) else v
-            for k, v in self.__dict__.items()
-        }
+        item = {}
+        for k, v in self.__dict__.items():
+            if isinstance(v, PropertyTree):
+                item[k] = v.dict()
+            elif isinstance(v, list):
+                item[k] = [sv.dict() for sv in v]
+            else:
+                item[k] = v
+        return item
 
     def __repr__(self):
         return json.dumps(self.dict())
@@ -62,3 +67,17 @@ def partial_format(s, **kwargs):
             ):  # Placeholder keys must always be followed by '!', ':', or the closing '}'
                 parts[idx] = parts[idx].format_map({k: v})
     return "".join(parts)
+
+
+def apply_nested(obj, func):
+    # Iterate on nested dict and format
+    for k, v in obj.items():
+        if isinstance(v, dict):
+            obj[k] = apply_nested(v, func)
+        elif isinstance(v, str):
+            obj[k] = func(v)
+        elif isinstance(v, list):
+            obj[k] = [apply_nested(i, func) for i in v]
+        else:
+            obj[k] = v
+    return obj

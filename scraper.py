@@ -9,20 +9,23 @@ import yaml
 from requests import Session
 
 # from move import transfert
-from utils import PropertyTree, deep_get, dict_to_obj_tree, partial_format
+from utils import PropertyTree, apply_nested, deep_get, dict_to_obj_tree, partial_format
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 import urllib.parse
+
+from requests_ratelimiter import LimiterSession
 
 logger = logging.getLogger("scaper")
 logger.setLevel(logging.DEBUG)
 
 
-class LiveServerSession(Session):
+class LiveServerSession(LimiterSession):
     """https://stackoverflow.com/a/51026159"""
 
     def __init__(self, prefix_url=None, headers={}, *args, **kwargs):
-        super(LiveServerSession, self).__init__(*args, **kwargs)
+        # Global rate limit 5 per second
+        super(LiveServerSession, self).__init__(per_second=5, *args, **kwargs)
         self.prefix_url = prefix_url
         self.headers.update(headers)
 
@@ -61,10 +64,12 @@ class Crawler:
         try:
             logger.info(method, attributes)
 
-            # dumps = json.dumps(attributes)
-            # dumps2 = partial_format(attributes, **self.config.params.dict())
-            # attributes2 = json.loads(dumps2)
-            response = self.session.request(method, **attributes)
+            # Iterate on nested dict and format
+            attributes_with_variable = apply_nested(
+                attributes,
+                lambda x: partial_format(x, **self.config.params.dict()),
+            )
+            response = self.session.request(method, **attributes_with_variable)
             response.raise_for_status()
         except Exception as err:
             logger.error(err)
@@ -83,8 +88,14 @@ class Strategy:
     def __init__(self, crawler, config):
         self.crawler = crawler
         self.config = config  # config could be just the name ?
+        self.params = {}  # custom params
 
     def start(self):
+        if hasattr(self.config, "dependencies"):
+            return
+        return self._start()
+
+    def _start():
         raise NotImplementedError
 
     def check_item(self, entity, item):
@@ -92,7 +103,13 @@ class Strategy:
             if dep.entity == entity:
                 value = item[dep.entity_key]
                 key = dep.key
-                self.run({key: value})
+
+                # if key in self.config.params:
+                #     pass
+                self.params[key] = value
+
+                print("entity", entity, value)
+                self._start()
 
     def add_item(self, item):
         self.crawler.add_item(self.config.entity, item)
@@ -101,6 +118,11 @@ class Strategy:
         method = getattr(
             self.config, "method", "GET"
         )  # TO HAVE IT EXPLICITELY IN CONFIG
+        # Iterate on nested dict and format
+        attributes = apply_nested(
+            attributes,
+            lambda x: partial_format(x, **self.params),
+        )
         response = self.crawler._fetch(method, **attributes)
 
         if self.config.format == "atom:1.0":  # should be moved ?
@@ -133,19 +155,16 @@ class Looping(Strategy):
 
 
 class DirectFetch(Strategy):
-    def start(self):
-        pass
-
-    def run(self, params):
-        url = self.config.request.url.format(**params)
+    def _start(self):
+        url = self.config.request.url
         result = self._fetch(url=url)
         self.add_item(result)
 
 
-class List(Crawler):
+class List(Strategy):
     """Listing without pagination"""
 
-    def start(self):
+    def _start(self):
         response = self._fetch(url=self.config.request.url)
         results = deep_get(response, self.config.key)
         for result in results:
@@ -156,10 +175,12 @@ class Listing(Strategy):
     """Listing with pagination"""
 
     def _fetch_list(self, cursor=None):
-
+        print("_fetch_list", cursor)
         request_attributes = getattr(self.config, "request", PropertyTree()).dict()
         if hasattr(self.config, "pagination") and cursor is not None:  # if pagination
             type = self.config.pagination.type
+            if not hasattr(request_attributes, type):
+                request_attributes[type] = {self.config.pagination.key: cursor}
             if isinstance(request_attributes[type], dict):
                 request_attributes[type][self.config.pagination.key] = cursor
             elif isinstance(request_attributes[type], str):
@@ -169,14 +190,13 @@ class Listing(Strategy):
             else:
                 raise Exception('Request params should be "dict" or "str"')
 
-        print(request_attributes)
         response = self._fetch(**request_attributes)
         results = deep_get(response, self.config.key)
         for result in results:
             self.add_item(result)
         return response
 
-    def start(self):
+    def _start(self):
         cursor = getattr(self.config.pagination, "default", None)
 
         for ind in range(1, 3):  # Testing purpose
@@ -198,7 +218,7 @@ class Slicing(Listing):
     def format_date(self, date):
         return date.strftime(self.config.slice.date_format)
 
-    def start(self):
+    def _start(self):
         request_attributes = getattr(self.config, "request", PropertyTree()).dict()
         params = self.config.slice
         if isinstance(request_attributes[params.type], str):
@@ -223,11 +243,13 @@ def type2class(type):
         return Listing
     elif type == "Slicing":
         return Slicing
+    elif type == "List":
+        return List
     else:
         raise NotImplementedError
 
 
 def runner(config):
-    config = dict_to_obj_tree(config)
-    crawler = Crawler(config)
+    config_tree = dict_to_obj_tree(config)
+    crawler = Crawler(config_tree)
     crawler.run()
