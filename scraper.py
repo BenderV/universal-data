@@ -58,18 +58,18 @@ class Crawler:
         for retriever in self.retrievers:
             retriever.start()
 
-        print(self.items)
-
     def _fetch(self, method, **attributes):
         try:
             logger.info(method, attributes)
 
-            # Iterate on nested dict and format
-            attributes_with_variable = apply_nested(
-                attributes,
-                lambda x: partial_format(x, **self.config.params.dict()),
-            )
-            response = self.session.request(method, **attributes_with_variable)
+            if hasattr(self.config, "params"):
+                # Iterate on nested dict and format
+                attributes = apply_nested(
+                    attributes,
+                    lambda x: partial_format(x, **self.config.params.dict()),
+                )
+
+            response = self.session.request(method, **attributes)
             response.raise_for_status()
         except Exception as err:
             logger.error(err)
@@ -108,7 +108,6 @@ class Strategy:
                 #     pass
                 self.params[key] = value
 
-                print("entity", entity, value)
                 self._start()
 
     def add_item(self, item):
@@ -134,7 +133,6 @@ class Looping(Strategy):
     max_value = None  # To Save and update ?
 
     def start(self):
-        print("run looping")
         max_value = self._fetch_max_value()
         logger.debug(f"max_value: {max_value}")  # TODO: to save
         for ind, value in enumerate(range(max_value, 0, -1)):
@@ -175,7 +173,6 @@ class Listing(Strategy):
     """Listing with pagination"""
 
     def _fetch_list(self, cursor=None):
-        print("_fetch_list", cursor)
         request_attributes = getattr(self.config, "request", PropertyTree()).dict()
         if hasattr(self.config, "pagination") and cursor is not None:  # if pagination
             type = self.config.pagination.type
@@ -253,3 +250,4 @@ def runner(config):
     config_tree = dict_to_obj_tree(config)
     crawler = Crawler(config_tree)
     crawler.run()
+    print(json.dumps(crawler.items))

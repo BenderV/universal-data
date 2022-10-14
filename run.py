@@ -23,5 +23,4 @@ if __name__ == "__main__":
         lambda x: partial_format(x, **params),
     )
 
-    print(source_config_with_params)
     scraper.runner(source_config_with_params)
