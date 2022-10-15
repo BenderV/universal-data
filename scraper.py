@@ -41,7 +41,8 @@ class LiveServerSession(LimiterSession):
 
 
 class Crawler:
-    def __init__(self, config):
+    def __init__(self, config, debug=False):
+        self.debug = debug
         self.items = defaultdict(list)  # FETCHED
         self.config = config
         self.session = LiveServerSession(
@@ -111,6 +112,7 @@ class Strategy:
                 self._start()
 
     def add_item(self, item):
+        item.update(self.params)
         self.crawler.add_item(self.config.entity, item)
 
     def _fetch(self, **attributes):
@@ -136,10 +138,14 @@ class Looping(Strategy):
         max_value = self._fetch_max_value()
         logger.debug(f"max_value: {max_value}")  # TODO: to save
         for ind, value in enumerate(range(max_value, 0, -1)):
-            if ind > 2:
-                break  # Testing purpose
+            if self.crawler.debug and ind > 3:
+                break
+            # Safety measure: stop if too many requests
+            if ind > 1000:
+                raise Exception("Too many requests")
             url = self.config.request.url.format(value)
             result = self._fetch(url=url)
+
             self.add_item(result)
 
     def _fetch_value(self, data, path):
@@ -196,7 +202,13 @@ class Listing(Strategy):
     def _start(self):
         cursor = getattr(self.config.pagination, "default", None)
 
-        for ind in range(1, 3):  # Testing purpose
+        # Safety measure: we don't want to loop forever
+        for ind in range(1, 1000):
+            if self.crawler.debug and ind > 3:
+                break
+            if ind >= 100:
+                raise Exception("Too many pagination")
+
             response = self._fetch_list(cursor)
             if hasattr(self.config.pagination, "ref"):
                 cursor = deep_get(response, self.config.pagination.ref)
@@ -246,8 +258,8 @@ def type2class(type):
         raise NotImplementedError
 
 
-def runner(config):
+def runner(config, debug=False):
     config_tree = dict_to_obj_tree(config)
-    crawler = Crawler(config_tree)
+    crawler = Crawler(config_tree, debug)
     crawler.run()
     print(json.dumps(crawler.items))
