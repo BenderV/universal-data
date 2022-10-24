@@ -300,7 +300,7 @@ def type2class(type):
         raise NotImplementedError
 
 
-def runner(config, target, debug=False, memory=File):
+def runner(config, target, debug=False, memory=File()):
     loader = DataWarehouse(target)
     normalizer = Normalizer(target)
     config_tree = dict_to_obj_tree(config)

@@ -1,15 +1,16 @@
+import os
+
 import pandas as pd
+from decouple import config as env
 from sqlalchemy import (BIGINT, Column, Date, DateTime, Float, ForeignKey,
                         Integer, Sequence, String, create_engine, dialects)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import Session, relationship
 from sqlalchemy.orm.attributes import flag_modified
-from sqlalchemy.sql import func
 
 Base = declarative_base()
-# TODO: set in env variable
-uri = "postgresql+psycopg2://localhost:5432/test"
+uri = env('DATABASE_URI')
 engine = create_engine(uri)
 session = Session(bind=engine)
 

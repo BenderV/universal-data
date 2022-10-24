@@ -1,11 +1,5 @@
-import argparse
-import json
-import sys
-from collections import defaultdict
-
 import pandas as pd
 from genson import SchemaBuilder
-from sqlalchemy import create_engine, dialects
 
 from load import DataWarehouse, Entity
 
@@ -43,8 +37,3 @@ class Normalizer(DataWarehouse):
             ]
             print(entity_name, len(rows))
             self.normalize_entity(entity_name, rows)
-
-
-if __name__ == "__main__":
-    database = Normalizer("postgresql+psycopg2://localhost:5432/mydb")
-    database.normalize()

@@ -32,8 +32,3 @@ class DataWarehouse:
         schema = Entity(entity=entity, data=item)
         self.session.add(schema)
         self.session.commit()
-
-
-if __name__ == "__main__":
-    loader = DataWarehouse("postgresql+psycopg2://localhost:5432/mydb")
-    loader.load("test", {"test": "ok"})

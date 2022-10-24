@@ -16,7 +16,13 @@ Automatically generate connectors using AI.
 
 ### Usage
 
-`python run.py sources/hacker_news.yml`
+Run direct config
+
+- `python run.py sources/hacker_news.yml --target postgresql+psycopg2://localhost:5432/universal-load`
+
+Run with database config
+
+- `python server.py`
 
 ## Strategies
 
