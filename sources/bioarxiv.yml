@@ -4,7 +4,8 @@
 
 host: https://api.biorxiv.org
 entities:
-  - name: Biorxiv Articles
+  - id: biorxiv
+    name: Biorxiv Articles
     entity: articles
     format: json
     type: Slicing
@@ -17,11 +18,12 @@ entities:
       type: url
     pagination:
       default: 0
-      step: 100
+      # step: 100 -> len
       # "ref": "collection",  # collection, so we will take len(collection)
       key: cursor
       type: url
-  - name: Medrxiv Articles
+  - id: medrxiv
+    name: Medrxiv Articles
     entity: articles
     format: json
     type: Slicing
@@ -34,7 +36,7 @@ entities:
       type: url
     pagination:
       default: 0
-      step: 100
+      # step: 100 -> len
       # "ref": "collection",  # collection, so we will take len(collection)
       key: cursor
       type: url

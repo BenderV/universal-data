@@ -5,11 +5,11 @@ from datetime import datetime
 from parser import atom_parse
 
 import urllib3
-import yaml
-from requests import Session
 
-# from move import transfert
-from utils import PropertyTree, apply_nested, deep_get, dict_to_obj_tree, partial_format
+from load import DataWarehouse
+from model import Normalizer
+from utils import (PropertyTree, apply_nested, deep_get, dict_to_obj_tree,
+                   partial_format)
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 import urllib.parse
@@ -29,19 +29,32 @@ class LiveServerSession(LimiterSession):
         self.prefix_url = prefix_url
         self.headers.update(headers)
 
-    def request(self, method, url, *args, **kwargs):
+    def request(self, method, *args, **kwargs):
         if "params" in kwargs:
             # Avoid encoding
             # https://stackoverflow.com/a/23497912/2131871
             kwargs["params"] = urllib.parse.urlencode(kwargs["params"], safe=":+")
-        url = self.prefix_url + url  # urljoin(self.prefix_url, url)
+        print(method, self.prefix_url, args, kwargs)
+        kwargs["url"] = self.prefix_url + kwargs["url"]  # urljoin(self.prefix_url, url)
         return super(LiveServerSession, self).request(
-            method, url, *args, **kwargs, verify=False
+            method, *args, **kwargs, verify=False
         )
 
 
+class File:
+    def save_state(self, id, state):
+        with open(f"store/state_{id}.json", "w+") as f:
+            f.write(json.dumps(state))
+
+    def load_state(self, id):
+        try:
+            with open(f"store/state_{id}.json", "r") as f:
+                return json.load(f)
+        except FileNotFoundError:
+            return None
+
 class Crawler:
-    def __init__(self, config, debug=False):
+    def __init__(self, config, debug=False, loader=lambda x: x, memory=File):
         self.debug = debug
         self.items = defaultdict(list)  # FETCHED
         self.config = config
@@ -51,6 +64,8 @@ class Crawler:
         self.retrievers = [
             type2class(entity.type)(self, entity) for entity in self.config.entities
         ]
+        self.loader = loader
+        self.memory = memory
         logger.debug(f"crawler host: {config.host}")
 
     def run(self):
@@ -78,7 +93,15 @@ class Crawler:
             raise
         return response
 
+    def export_item(self, entity, item):
+        self.loader.load(entity, item)
+        # TODO: Implement strategy here ?
+        # with open(f"store/data_{entity}.jsonl", "a+") as f:
+        #    line = json.dumps(item)
+        #    f.write(line + "\n")
+
     def add_item(self, entity, item):
+        self.export_item(entity, item)
         self.items[entity].append(item)
         for retriever in self.retrievers:
             retriever.check_item(entity, item)
@@ -90,14 +113,22 @@ class Strategy:
         self.crawler = crawler
         self.config = config  # config could be just the name ?
         self.params = {}  # custom params
+        self.state = {}
 
     def start(self):
+        self.load_state()
         if hasattr(self.config, "dependencies"):
             return
         return self._start()
 
     def _start():
         raise NotImplementedError
+
+    def save_state(self):
+        self.crawler.memory.save_state(self.config.id, self.state)
+
+    def load_state(self):
+        self.state = self.crawler.memory.load_state(self.config.id)
 
     def check_item(self, entity, item):
         for dep in getattr(self.config, "dependencies", []):
@@ -182,7 +213,7 @@ class Listing(Strategy):
         request_attributes = getattr(self.config, "request", PropertyTree()).dict()
         if hasattr(self.config, "pagination") and cursor is not None:  # if pagination
             type = self.config.pagination.type
-            if not hasattr(request_attributes, type):
+            if type not in request_attributes:
                 request_attributes[type] = {self.config.pagination.key: cursor}
             if isinstance(request_attributes[type], dict):
                 request_attributes[type][self.config.pagination.key] = cursor
@@ -194,26 +225,37 @@ class Listing(Strategy):
                 raise Exception('Request params should be "dict" or "str"')
 
         response = self._fetch(**request_attributes)
-        results = deep_get(response, self.config.key)
-        for result in results:
-            self.add_item(result)
         return response
 
     def _start(self):
-        cursor = getattr(self.config.pagination, "default", None)
+        cursor = self.state.get("cursor") or getattr(
+            self.config.pagination, "default", None
+        )
 
         # Safety measure: we don't want to loop forever
-        for ind in range(1, 1000):
+        ind = -1
+        while True:
+            ind += 1
+
             if self.crawler.debug and ind > 3:
                 break
-            if ind >= 100:
-                raise Exception("Too many pagination")
 
             response = self._fetch_list(cursor)
+            results = deep_get(response, self.config.key)
+            for result in results:
+                self.add_item(result)
+
+            if not results:
+                return
+
             if hasattr(self.config.pagination, "ref"):
                 cursor = deep_get(response, self.config.pagination.ref)
             else:
-                cursor = (1 + ind) * self.config.pagination.step
+                cursor = cursor + len(results)  # self.config.pagination.step
+
+            self.state["cursor"] = cursor
+            self.save_state()
+
             if not cursor:
                 break
 
@@ -221,8 +263,8 @@ class Listing(Strategy):
 class Slicing(Listing):
     """Slice with date"""
 
-    from_date = datetime(1900, 1, 1)
-    to_date = datetime.now()
+    from_date = datetime(1, 1, 1)  # datetime(1900, 1, 1)
+    to_date = datetime(9999, 12, 31)  # datetime.now()
 
     def format_date(self, date):
         return date.strftime(self.config.slice.date_format)
@@ -240,7 +282,7 @@ class Slicing(Listing):
         else:
             raise Exception('Request params should be "dict" or "str"')
 
-        return super(Slicing, self).start()
+        return super(Slicing, self)._start()
 
 
 def type2class(type):
@@ -258,8 +300,10 @@ def type2class(type):
         raise NotImplementedError
 
 
-def runner(config, debug=False):
+def runner(config, target, debug=False, memory=File):
+    loader = DataWarehouse(target)
+    normalizer = Normalizer(target)
     config_tree = dict_to_obj_tree(config)
-    crawler = Crawler(config_tree, debug)
+    crawler = Crawler(config_tree, loader=loader, debug=debug, memory=memory)
     crawler.run()
-    print(json.dumps(crawler.items))
+    normalizer.normalize()
