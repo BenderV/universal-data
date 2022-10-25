@@ -20,9 +20,4 @@ if __name__ == "__main__":
     # https://stackoverflow.com/a/5389547/2131871
     params = dict(zip([l.strip("--") for l in unknown_args[::2]], unknown_args[1::2]))
 
-    source_config_with_params = apply_nested(
-        source_config,
-        lambda x: partial_format(x, **params),
-    )
-
-    scraper.runner(source_config_with_params, args.target, args.debug)
+    scraper.runner(source_config, args.target, args.debug, params=params)

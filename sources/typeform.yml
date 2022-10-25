@@ -2,8 +2,9 @@ host: https://api.typeform.com
 headers:
   Content-Type: application/json
   Authorization: Bearer tfp_geY4SoC6xQwEDQ1R1TTsrakfPsekL6zQXmK2pmyEF2o_h29T837UjtJs
-entities:
-  - name: Forms
+routes:
+  - id: forms
+    name: Forms
     entity: forms
     format: json
     type: Listing

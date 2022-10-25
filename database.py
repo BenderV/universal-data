@@ -2,8 +2,9 @@ import os
 
 import pandas as pd
 from decouple import config as env
-from sqlalchemy import (BIGINT, Column, Date, DateTime, Float, ForeignKey,
-                        Integer, Sequence, String, create_engine, dialects)
+from sqlalchemy import (BIGINT, Boolean, Column, Date, DateTime, Float,
+                        ForeignKey, Integer, Sequence, String, create_engine,
+                        dialects)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import Session, relationship
@@ -117,6 +118,10 @@ class Pipeline(Base):
         back_populates="pipelines",
     )
 
+    active = Column(
+        Boolean(),
+        default=True,
+    )
 
 if __name__ == "__main__":
     Base.metadata.create_all(engine)

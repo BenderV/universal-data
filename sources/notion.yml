@@ -4,7 +4,8 @@ headers:
   Authorization: Bearer secret_zBAolxSkAC1Jh8sKzIguaRQ511FWZ1ViyAJjRwG6I7f
   Notion-Version: "2022-06-28"
 entities:
-  - name: User
+  - id: users
+    name: User
     entity: users
     format: json
     type: Listing
@@ -18,7 +19,8 @@ entities:
       ref: next_cursor
       key: start_cursor
       type: params
-  - name: Pages
+  - id: pages
+    name: Pages
     entity: pages
     format: json
     type: Listing

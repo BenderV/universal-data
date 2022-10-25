@@ -2,8 +2,9 @@
 
 host: https://hacker-news.firebaseio.com/v0
 
-entities: # should be routes or retriever... ?
-  - name: Item
+routes: # should be routes or retriever... ?
+  - id: item
+    name: Item
     entity: item
     format: json
     type: Looping
@@ -13,7 +14,8 @@ entities: # should be routes or retriever... ?
       type: Int
       url: /maxitem.json
       key_path: null # direct
-  - name: User
+  - id: user
+    name: User
     entity: user
     format: json
     type: DirectFetch

@@ -1,6 +1,7 @@
 # Airtable represent their data with tables, tables_records
 # but user want the view of their data base
 
+id: airtable
 host: https://api.airtable.com/v0
 params:
   baseId: { type: string } # add how to verify it ?
@@ -8,7 +9,7 @@ params:
 headers:
   Content-Type: application/json
   Authorization: Bearer {idToken}
-entities: # should be routes
+routes: # should be routes
   - id: tables
     name: Tables
     entity: tables

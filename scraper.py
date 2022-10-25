@@ -62,7 +62,7 @@ class Crawler:
             config.host, headers=config.select("headers", {})
         )
         self.retrievers = [
-            type2class(entity.type)(self, entity) for entity in self.config.entities
+            type2class(entity.type)(self, entity) for entity in self.config.routes
         ]
         self.loader = loader
         self.memory = memory
@@ -94,7 +94,7 @@ class Crawler:
         return response
 
     def export_item(self, entity, item):
-        self.loader.load(entity, item)
+        self.loader.load(self.config.id, entity, item)
         # TODO: Implement strategy here ?
         # with open(f"store/data_{entity}.jsonl", "a+") as f:
         #    line = json.dumps(item)
@@ -300,10 +300,14 @@ def type2class(type):
         raise NotImplementedError
 
 
-def runner(config, target, debug=False, memory=File()):
+def runner(config: dict, target: str, debug=False, memory=File(), params={}):
+    config = apply_nested(
+        config,
+        lambda x: partial_format(x, **params),
+    )
     loader = DataWarehouse(target)
     normalizer = Normalizer(target)
     config_tree = dict_to_obj_tree(config)
-    crawler = Crawler(config_tree, loader=loader, debug=debug, memory=memory)
+    crawler = Crawler(config_tree, debug=debug, memory=memory, loader=loader)
     crawler.run()
-    normalizer.normalize()
+    normalizer.normalize(config_tree.id)

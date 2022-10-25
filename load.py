@@ -1,4 +1,5 @@
-from sqlalchemy import Column, DateTime, Integer, String, create_engine
+from sqlalchemy import (Boolean, Column, DateTime, Integer, String,
+                        create_engine)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import Session
@@ -14,11 +15,16 @@ class Entity(Base):
         primary_key=True,
         autoincrement=True,
     )
+    source_id = Column(
+        String(),
+        nullable=False,
+    )
     entity = Column(
         String(),
         nullable=False,
     )
     created_at = Column(DateTime(timezone=True), nullable=False, default=func.now())
+    processed = Column(Boolean(), default=False)
     data = Column(JSONB)
 
 
@@ -28,7 +34,7 @@ class DataWarehouse:
         Base.metadata.create_all(self.engine)
         self.session = Session(bind=self.engine)
 
-    def load(self, entity, item):
-        schema = Entity(entity=entity, data=item)
+    def load(self, source_id, entity, item):
+        schema = Entity(source_id=source_id, entity=entity, data=item)
         self.session.add(schema)
         self.session.commit()

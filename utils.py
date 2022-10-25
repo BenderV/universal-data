@@ -15,7 +15,7 @@ class PropertyTree:
             if isinstance(v, PropertyTree):
                 item[k] = v.dict()
             elif isinstance(v, list):
-                item[k] = [sv.dict() for sv in v]
+                item[k] = [sv.dict() if isinstance(sv, PropertyTree) else sv for sv in v]
             else:
                 item[k] = v
         return item
@@ -37,13 +37,18 @@ class PropertyTree:
 
 def dict_to_obj_tree(yaml_config: Dict[str, Any]) -> PropertyTree:
     tree = PropertyTree()
-    for key, value in yaml_config.items():
-        if type(value) == dict:
-            setattr(tree, key, dict_to_obj_tree(value))
-        elif type(value) == list:
-            setattr(tree, key, [dict_to_obj_tree(v) for v in value])
-        else:
-            setattr(tree, key, value)
+    if isinstance(yaml_config, dict):
+        for key, value in yaml_config.items():
+            if type(value) == dict:
+                setattr(tree, key, dict_to_obj_tree(value))
+            elif type(value) == list:
+                setattr(tree, key, [dict_to_obj_tree(v) for v in value])
+            else:
+                setattr(tree, key, value)
+    elif isinstance(yaml_config, list):
+        return [dict_to_obj_tree(v) for v in yaml_config]
+    else:
+        return yaml_config
     return tree
 
 
@@ -71,13 +76,14 @@ def partial_format(s, **kwargs):
 
 def apply_nested(obj, func):
     # Iterate on nested dict and format
-    for k, v in obj.items():
-        if isinstance(v, dict):
-            obj[k] = apply_nested(v, func)
-        elif isinstance(v, str):
-            obj[k] = func(v)
-        elif isinstance(v, list):
-            obj[k] = [apply_nested(i, func) for i in v]
-        else:
-            obj[k] = v
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            if isinstance(v, dict):
+                obj[k] = apply_nested(v, func)
+            elif isinstance(v, str):
+                obj[k] = func(v)
+            elif isinstance(v, list):
+                obj[k] = [apply_nested(i, func) for i in v]
+            else:
+                obj[k] = v
     return obj

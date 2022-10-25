@@ -1,6 +1,7 @@
 host: http://export.arxiv.org/api
-entities:
-  - name: Articles
+routes:
+  - id: articles
+    name: Articles
     entity: articles
     format: atom:1.0
     type: Listing
