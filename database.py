@@ -11,7 +11,7 @@ from sqlalchemy.orm.attributes import flag_modified
 
 Base = declarative_base()
 uri = env('DATABASE_URI')
-engine = create_engine(uri)
+engine = create_engine(uri, pool_pre_ping=True)
 session = Session(bind=engine)
 
 class Source(Base):
