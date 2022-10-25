@@ -302,10 +302,11 @@ def type2class(type):
 
 
 def runner(config: dict, target: str, debug=False, memory=File(), params={}):
-    config = apply_nested(
-        config,
-        lambda x: partial_format(x, **params),
-    )
+    if params:
+        config = apply_nested(
+            config,
+            lambda x: partial_format(x, **params),
+        )
     loader = DataWarehouse(target)
     normalizer = Normalizer(target)
     config_tree = dict_to_obj_tree(config)

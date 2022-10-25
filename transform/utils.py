@@ -1,7 +1,6 @@
 from collections import defaultdict
 from concurrent.futures import process
 
-import pandas as pd
 import yaml
 from genson import SchemaBuilder
 from load.base import DataWarehouse, Entity

@@ -1,6 +1,5 @@
 import os
 
-import pandas as pd
 from decouple import config as env
 from sqlalchemy import (BIGINT, Boolean, Column, Date, DateTime, Float,
                         ForeignKey, Integer, Sequence, String, create_engine,
@@ -122,6 +121,12 @@ class Pipeline(Base):
         Boolean(),
         default=True,
     )
+
+    status = Column(
+        String(),
+        nullable=True,
+    )
+
 
 if __name__ == "__main__":
     Base.metadata.create_all(engine)
