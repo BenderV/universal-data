@@ -2,7 +2,7 @@
 # Documentation: https://api.biorxiv.org/
 # https://api.biorxiv.org/pubs/medrxiv/2020-03-01/2020-03-30/5
 
-id: bioarxiv
+id: biorxiv
 host: https://api.biorxiv.org
 entities:
   articles:
