@@ -310,6 +310,8 @@ def runner(config: dict, target: str, debug=False, memory=File(), params={}):
     loader = DataWarehouse(target)
     normalizer = Normalizer(target)
     config_tree = dict_to_obj_tree(config)
+    print("Will crawl")
     crawler = Crawler(config_tree, debug=debug, memory=memory, loader=loader)
     crawler.run()
+    print("Will normalize")
     normalizer.normalize(config_tree.id)

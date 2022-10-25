@@ -11,6 +11,7 @@ from sqlalchemy.orm.attributes import flag_modified
 
 Base = declarative_base()
 uri = env('DATABASE_URI')
+# https://docs.sqlalchemy.org/en/13/core/pooling.html#dealing-with-disconnects
 engine = create_engine(uri, pool_pre_ping=True)
 session = Session(bind=engine)
 
