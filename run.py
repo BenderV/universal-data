@@ -2,8 +2,7 @@ import argparse
 
 import yaml
 
-import scraper
-from utils import apply_nested, partial_format
+from extract import scraper
 
 if __name__ == "__main__":
     # Next: switch to dynamic config

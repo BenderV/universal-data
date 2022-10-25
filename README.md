@@ -4,15 +4,19 @@ Automatically generate connectors using AI.
 
 ### Structure
 
-- `sources/`: the config files for sources
-- `store/`: tempory directoy to store data
+- `extract/`
+  - `parser.py`: api response parser (json, xml, ...)
+  - `scraper.py`: all the scraping methods
+  - `utils.py`: utils fonctions
+- `transform/`:
+  - `model.py`: functions for modelisation / normalization
+- `load/`
+  - `base.py`: sqlalchemy model to load data into the destination
+- `sources`: the config files for sources
+- `store`: tempory directoy to store data
 - `database.py`: utils for database/datawarehouse
-- `load.py`: functions to load data into the destination
-- `model.py`: functions for modelisation / normalization
-- `parser.py`: api response parser (json, xml, ...)
 - `run.py`: script to run the program
-- `scraper.py`: all the scraping methods
-- `utils.py`: utils fonctions
+- `server.py`: server to manage all pipelines
 
 ### Usage
 

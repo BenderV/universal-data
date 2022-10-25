@@ -4,9 +4,8 @@ from concurrent.futures import process
 import pandas as pd
 import yaml
 from genson import SchemaBuilder
+from load.base import DataWarehouse, Entity
 from sqlalchemy import dialects
-
-from load import DataWarehouse, Entity
 
 
 def generate_jsonschema(rows):

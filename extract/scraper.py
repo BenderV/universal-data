@@ -2,14 +2,14 @@ import json
 import logging
 from collections import defaultdict
 from datetime import datetime
-from parser import atom_parse
 
 import urllib3
+from load.base import DataWarehouse
+from transform.model import Normalizer
 
-from load import DataWarehouse
-from model import Normalizer
-from utils import (PropertyTree, apply_nested, deep_get, dict_to_obj_tree,
-                   partial_format)
+from extract.parser import atom_parse
+from extract.utils import (PropertyTree, apply_nested, deep_get,
+                           dict_to_obj_tree, partial_format)
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 import urllib.parse
@@ -51,7 +51,8 @@ class File:
             with open(f"store/state_{id}.json", "r") as f:
                 return json.load(f)
         except FileNotFoundError:
-            return None
+            logger.error('FileNotFoundError: "store/state_%s.json"', id)
+            return {}
 
 class Crawler:
     def __init__(self, config, debug=False, loader=lambda x: x, memory=File):
