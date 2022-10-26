@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 from collections import defaultdict
 from datetime import datetime
 
@@ -14,18 +15,47 @@ from extract.utils import (PropertyTree, apply_nested, deep_get,
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 import urllib.parse
 
-from requests_ratelimiter import LimiterSession
+from dotenv import load_dotenv
+from pyrate_limiter import Duration, RequestRate
+from requests import Session
+from requests_cache import CacheMixin
+from requests_cache.backends.filesystem import FileCache
+from requests_ratelimiter import LimiterMixin
 
+load_dotenv()
 logger = logging.getLogger("scaper")
 logger.setLevel(logging.DEBUG)
 
+logging.getLogger('requests_cache').setLevel('DEBUG')
 
-class LiveServerSession(LimiterSession):
+CACHE_DIR = os.environ['CACHE_DIR']
+
+class CachedLimiterSession(CacheMixin, LimiterMixin, Session):
+    """Session class with caching and rate-limiting behavior. Accepts arguments for both
+    LimiterSession and CachedSession.
+    """
+
+class FileCacheWithPostgres(FileCache):
+    def save_response(self, response, cache_key=None, expires=None):
+        print("cache_key", cache_key)
+        super().save_response(response, cache_key, expires)
+    
+
+file_cache_backend = FileCacheWithPostgres(
+    cache_name=CACHE_DIR,
+)
+class CustomSession(CachedLimiterSession):
     """https://stackoverflow.com/a/51026159"""
 
     def __init__(self, prefix_url=None, headers={}, *args, **kwargs):
-        # Global rate limit 5 per second
-        super(LiveServerSession, self).__init__(per_second=5, *args, **kwargs)
+        super().__init__(
+            per_second=5, # Global rate limit 5 per second
+            cache_name=CACHE_DIR,
+            use_cache_dir=False,
+            backend=file_cache_backend,
+            serializer='json',
+            *args, **kwargs,
+        )
         self.prefix_url = prefix_url
         self.headers.update(headers)
 
@@ -36,11 +66,9 @@ class LiveServerSession(LimiterSession):
             kwargs["params"] = urllib.parse.urlencode(kwargs["params"], safe=":+")
         print(method, self.prefix_url, args, kwargs)
         kwargs["url"] = self.prefix_url + kwargs["url"]  # urljoin(self.prefix_url, url)
-        return super(LiveServerSession, self).request(
+        return super(CustomSession, self).request(
             method, *args, **kwargs, verify=False
         )
-
-
 class File:
     def save_state(self, id, state):
         with open(f"store/state_{id}.json", "w+") as f:
@@ -59,8 +87,8 @@ class Crawler:
         self.debug = debug
         self.items = defaultdict(list)  # FETCHED
         self.config = config
-        self.session = LiveServerSession(
-            config.host, headers=config.select("headers", {})
+        self.session = CustomSession(
+            config.host, headers=config.select("headers", {}),
         )
         self.retrievers = [
             type2class(entity.type)(self, entity) for entity in self.config.routes
