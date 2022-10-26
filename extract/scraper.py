@@ -293,7 +293,7 @@ class Listing(Strategy):
 class Slicing(Listing):
     """Slice with date"""
 
-    from_date = datetime(1, 1, 1)  # datetime(1900, 1, 1)
+    from_date = datetime(1900, 1, 1)
     to_date = datetime(9999, 12, 31)  # datetime.now()
 
     def format_date(self, date):
