@@ -34,9 +34,10 @@ def run_pipelines():
     if running_pipeline is not None:
         return
 
-
+    print("look for pipelines to run")
     # If not, we look in the queue for a pipeline to run
     pipelines = session.query(Pipeline).filter_by(active=True, status=STATUS.QUEUED).all()
+    print(f"{len(pipelines)} to run")
     for pipeline in pipelines:
         print("Running pipeline", pipeline.id)
         pipeline.status = STATUS.RUNNING

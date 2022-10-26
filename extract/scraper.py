@@ -247,6 +247,7 @@ class Listing(Strategy):
                 self.add_item(result)
 
             if not results:
+                print('Stop because no result')
                 return
 
             if hasattr(self.config.pagination, "ref"):
