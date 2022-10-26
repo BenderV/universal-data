@@ -15,9 +15,10 @@ from extract.utils import (PropertyTree, apply_nested, deep_get,
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 import urllib.parse
 
+import backoff
+import requests
 from dotenv import load_dotenv
 from pyrate_limiter import Duration, RequestRate
-from requests import Session
 from requests_cache import CacheMixin
 from requests_cache.backends.filesystem import FileCache
 from requests_ratelimiter import LimiterMixin
@@ -30,7 +31,10 @@ logging.getLogger('requests_cache').setLevel('DEBUG')
 
 CACHE_DIR = os.environ['CACHE_DIR']
 
-class CachedLimiterSession(CacheMixin, LimiterMixin, Session):
+class NoResultException(Exception):
+    pass
+
+class CachedLimiterSession(CacheMixin, LimiterMixin, requests.Session):
     """Session class with caching and rate-limiting behavior. Accepts arguments for both
     LimiterSession and CachedSession.
     """
@@ -59,6 +63,11 @@ class CustomSession(CachedLimiterSession):
         self.prefix_url = prefix_url
         self.headers.update(headers)
 
+    @backoff.on_exception(
+        backoff.expo,
+        requests.exceptions.RequestException,
+        max_tries=5,
+    )
     def request(self, method, *args, **kwargs):
         if "params" in kwargs:
             # Avoid encoding
@@ -238,6 +247,11 @@ class List(Strategy):
 class Listing(Strategy):
     """Listing with pagination"""
 
+    @backoff.on_exception(
+        backoff.expo,
+        NoResultException,
+        max_tries=3,
+    )
     def _fetch_list(self, cursor=None):
         request_attributes = getattr(self.config, "request", PropertyTree()).dict()
         if hasattr(self.config, "pagination") and cursor is not None:  # if pagination
@@ -254,7 +268,19 @@ class Listing(Strategy):
                 raise Exception('Request params should be "dict" or "str"')
 
         response = self._fetch(**request_attributes)
-        return response
+        results = deep_get(response, self.config.key)
+        for result in results:
+            self.add_item(result)
+
+        if not results:
+            raise NoResultException('No results')
+        
+        if hasattr(self.config.pagination, "ref"):
+            cursor = deep_get(response, self.config.pagination.ref)
+        else:
+            cursor = cursor + len(results)  # self.config.pagination.step
+        
+        return cursor
 
     def _start(self):
         cursor = self.state.get("cursor") or getattr(
@@ -268,21 +294,12 @@ class Listing(Strategy):
 
             if self.crawler.debug and ind > 3:
                 break
-
-            response = self._fetch_list(cursor)
-            results = deep_get(response, self.config.key)
-            for result in results:
-                self.add_item(result)
-
-            if not results:
-                print('Stop because no result')
-                return
-
-            if hasattr(self.config.pagination, "ref"):
-                cursor = deep_get(response, self.config.pagination.ref)
-            else:
-                cursor = cursor + len(results)  # self.config.pagination.step
-
+        
+            try:
+                cursor = self._fetch_list(cursor)
+            except NoResultException:
+                break
+            
             self.state["cursor"] = cursor
             self.save_state()
 
