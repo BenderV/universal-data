@@ -128,6 +128,10 @@ class Pipeline(Base):
         nullable=True,
     )
 
+    transform_status = Column(
+        String(),
+        nullable=True,
+    )
 
 if __name__ == "__main__":
     Base.metadata.create_all(engine)

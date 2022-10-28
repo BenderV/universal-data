@@ -6,7 +6,6 @@ from datetime import datetime
 
 import urllib3
 from load.base import DataWarehouse
-from transform.model import Normalizer
 
 from extract.parser import atom_parse
 from extract.utils import (PropertyTree, apply_nested, deep_get,
@@ -51,9 +50,9 @@ file_cache_backend = FileCacheWithPostgres(
 class CustomSession(CachedLimiterSession):
     """https://stackoverflow.com/a/51026159"""
 
-    def __init__(self, prefix_url=None, headers={}, *args, **kwargs):
+    def __init__(self, rate_limit=20, prefix_url=None, headers={}, *args, **kwargs):
         super().__init__(
-            per_second=5, # Global rate limit 5 per second
+            per_second=rate_limit, # 100 requests per second max
             cache_name=CACHE_DIR,
             use_cache_dir=False,
             backend=file_cache_backend,
@@ -97,7 +96,8 @@ class Crawler:
         self.items = defaultdict(list)  # FETCHED
         self.config = config
         self.session = CustomSession(
-            config.host, headers=config.select("headers", {}),
+            rate_limit=config.select('rate_limit', 20),
+            crawler=self, prefix_url=config.host, headers=config.select("headers", {}),
         )
         self.retrievers = [
             type2class(entity.type)(self, entity) for entity in self.config.routes
@@ -354,10 +354,7 @@ def runner(config: dict, target: str, debug=False, memory=File(), params={}):
             lambda x: partial_format(x, **params),
         )
     loader = DataWarehouse(target)
-    normalizer = Normalizer(target)
     config_tree = dict_to_obj_tree(config)
     print("Will crawl")
     crawler = Crawler(config_tree, debug=debug, memory=memory, loader=loader)
     crawler.run()
-    print("Will normalize")
-    normalizer.normalize(config_tree.id)
