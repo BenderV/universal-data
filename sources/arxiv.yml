@@ -1,4 +1,8 @@
+id: arxiv
 host: http://export.arxiv.org/api
+entities:
+  articles:
+    - id
 routes:
   - id: articles
     name: Articles
@@ -11,12 +15,12 @@ routes:
     request:
       url: /query
       params:
-        max_results: 2 # default
+        max_results: 100 # default
         search_query: >-
           cat:cs.CV+OR+cat:cs.LG+OR+cat:cs.CL+OR+cat:cs.AI+OR+cat:cs.NE+OR+cat:cs.RO
-        sortBy: lastUpdatedDate
-        sortOrder: descending
+        sortBy: submittedDate
+        sortOrder: ascending
     pagination:
-      step: 2 # should be len(result) ?
+      default: 0
       key: start
       type: params
