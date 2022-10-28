@@ -72,6 +72,7 @@ class EntityNormalization:
         self.db.engine.execute(query)
     
     def insert_data(self, rows):
+        print(f'insert_data: {len(rows)} rows')
         df = pd.DataFrame(rows)
         meta = sa.MetaData(self.db.engine)
         upsert_method = create_upsert_method(meta)

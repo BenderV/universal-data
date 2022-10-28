@@ -1,6 +1,7 @@
 from transform.normalize import EntityNormalization
 from transform.dedup import Deduplicator
 from load.base import DataWarehouse
+import argparse
 
 def run_transform(target_uri):
     db = DataWarehouse(target_uri)
@@ -12,3 +13,10 @@ def run_transform(target_uri):
         print('Normalize entity:', entity)
         en = EntityNormalization(db, entity['source_id'], entity['entity'])
         en.normalize()
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--target", type=str)
+    args, unknown_args = parser.parse_known_args()
+    run_transform(args.target)

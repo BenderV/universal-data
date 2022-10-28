@@ -56,7 +56,7 @@ class Deduplicator:
                 queries_source_entity_with_key.append(query_source_entity)
  
             dedup_query = f"""
-                CREATE OR REPLACE VIEW "__ud_dedup" AS
+                CREATE TABLE "__ud_dedup" AS
                 SELECT *
                 FROM (
                     SELECT 
@@ -68,7 +68,7 @@ class Deduplicator:
                 ) AS rows_rank
                 WHERE inverse_rank = 1
             """
-            
+            conn.execute('DROP TABLE IF EXISTS "__ud_dedup"')
             conn.execute(dedup_query)
 
 
