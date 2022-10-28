@@ -9,6 +9,11 @@ params:
 headers:
   Content-Type: application/json
   Authorization: Bearer {idToken}
+entities:
+  tables:
+    - id
+  tables_records:
+    - id
 routes: # should be routes
   - id: tables
     name: Tables

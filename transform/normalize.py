@@ -3,7 +3,7 @@ from enum import Enum
 import pandas as pd
 import sqlalchemy as sa
 from sqlalchemy import dialects
-from transform.utils import generate_jsonschema, create_upsert_method
+from transform.utils import generate_jsonschema, create_upsert_method, airtable_unnest_tables
 
 POSTGRES_TYPES = {
     'array': 'jsonb',
@@ -11,6 +11,17 @@ POSTGRES_TYPES = {
     'object': 'jsonb',
     'string': 'text',
 }
+
+def extract_type_from_df(df):
+    dtypes_dict = {
+        column: dialects.postgresql.JSONB
+        for column in df.columns
+        if any(
+            isinstance(df.iloc[row][column], dict) or isinstance(df.iloc[row][column], list)
+            for row in range(0, len(df))
+        )
+    }
+    return dtypes_dict
 
 class EntityNormalization:
     schema = 'public'
@@ -27,7 +38,7 @@ class EntityNormalization:
         table_exist = insp.has_table(self.table_name, schema=self.schema)
         return table_exist
 
-    def _fetch_rows_to_insert(self):
+    def _fetch_rows_to_insert(self, limit=None):
         query_filter = f"""
             AND __key NOT IN (
                 SELECT __key
@@ -42,7 +53,7 @@ class EntityNormalization:
             {query_filter}
             AND source_id = '{self.source_id}'
             AND entity = '{self.entity}'
-            LIMIT {self.chunk_size}
+            LIMIT {self.chunk_size if limit is None else limit}
         """
         rows_raw = self.db.engine.execute(query).all()
         rows = [{
@@ -59,7 +70,7 @@ class EntityNormalization:
         for col_name, value in schema['properties'].items():
             col_type = POSTGRES_TYPES.get(value['type'])
             suffix = "PRIMARY KEY" if col_name == '__key' else ""
-            columns.append(f"{col_name} {col_type} {suffix}")
+            columns.append(f'"{col_name}" {col_type} {suffix}')
 
         columns = ", ".join(columns)
         
@@ -68,6 +79,7 @@ class EntityNormalization:
                 {columns}
             )
         """
+        print(query)
         self.db.engine.execute(f"DROP TABLE IF EXISTS {self.table_name}")
         self.db.engine.execute(query)
     
@@ -77,15 +89,6 @@ class EntityNormalization:
         meta = sa.MetaData(self.db.engine)
         upsert_method = create_upsert_method(meta)
             
-        dtypes_dict = {
-            column: dialects.postgresql.JSONB
-            for column in df.columns
-            if any(
-                isinstance(df.iloc[row][column], dict) or isinstance(df.iloc[row][column], list)
-                for row in range(0, len(df))
-            )
-        }
-
         df.to_sql(
           self.table_name,
           self.db.engine,
@@ -94,7 +97,7 @@ class EntityNormalization:
           if_exists="append",
           chunksize=self.chunk_size,
           method=upsert_method,
-          dtype=dtypes_dict
+          dtype=extract_type_from_df(df)
         )
       
     def normalize(self):
@@ -112,6 +115,29 @@ class EntityNormalization:
             if not rows:
                 break
             self.insert_data(rows)
+
+        # Hack ...
+        if self.source_id == 'airtable' and self.entity == 'tables_records':
+            print(f"Hack airtable")
+            query = f"""
+                SELECT *
+                FROM {self.table_name}
+            """
+            rows_raw = self.db.engine.execute(query).all()
+            rows = [dict(r) for r in rows_raw]
+            tables = airtable_unnest_tables(rows)
+            for table, rows in tables.items():
+                print(f"Update table: {table} with {len(rows)}")
+                df = pd.DataFrame(rows)
+                df.to_sql(
+                    table,
+                    self.db.engine,
+                    schema=self.schema,
+                    index=False,
+                    if_exists="replace",
+                    chunksize=self.chunk_size,
+                    dtype=extract_type_from_df(df)
+                )
 
 if __name__ == "__main__":
     db = EntityNormalization(uri="postgresql://localhost:5432/biolook")
