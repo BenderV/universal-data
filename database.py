@@ -3,17 +3,24 @@ import os
 from decouple import config as env
 from sqlalchemy import (BIGINT, Boolean, Column, Date, DateTime, Float,
                         ForeignKey, Integer, Sequence, String, create_engine,
-                        dialects)
+                        dialects, event)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import Session, relationship
 from sqlalchemy.orm.attributes import flag_modified
+from datetime import datetime
 
 Base = declarative_base()
 uri = env('DATABASE_URI')
 # https://docs.sqlalchemy.org/en/13/core/pooling.html#dealing-with-disconnects
 engine = create_engine(uri, pool_pre_ping=True)
 session = Session(bind=engine)
+
+class STATUS:
+    ERROR = 'error'
+    DONE = 'done'
+    QUEUED = 'queued'
+    RUNNING = 'running'
 
 class Source(Base):
     __tablename__ = "sources"
@@ -89,6 +96,70 @@ class Client(Base):
     targets = relationship("Target", back_populates="client")
 
 
+class Task(Base):
+    __tablename__ = "tasks"
+
+    id = Column(
+        Integer(),
+        primary_key=True,
+        autoincrement=True,
+    )
+    pipeline_id = Column(
+        Integer(),
+        ForeignKey("pipelines.id"),
+        nullable=False,
+    )
+    pipeline = relationship(
+        "Pipeline",
+        back_populates="tasks",
+    )
+
+    type = Column(
+        String(),
+        nullable=False,
+    )
+
+    status = Column(
+        String(),
+        nullable=True,
+    )
+
+    error_log = Column(
+        String(),
+        nullable=True,
+    )
+
+    time_start = Column(
+        DateTime(),
+        nullable=True,
+    )
+
+    time_end = Column(
+        DateTime(),
+        nullable=True,
+    )
+
+
+@event.listens_for(Task.status, 'set')
+def update_status(target, value, old_value, initiator):
+    
+
+    pipeline = session.query(Pipeline).get(target.pipeline_id)
+    if target.type == 'extract':
+        pipeline.extract_status = value
+        if value == STATUS.RUNNING:
+            pipeline.extract_started_at = datetime.now()
+    elif target.type == 'transform':
+        pipeline.transform_status = value
+        if value == STATUS.RUNNING:
+            pipeline.transform_started_at = datetime.now()
+    else:
+        raise Exception('task type not recognized')
+
+    
+
+
+
 class Pipeline(Base):
     __tablename__ = "pipelines"
 
@@ -123,8 +194,12 @@ class Pipeline(Base):
         default=True,
     )
 
-    status = Column(
+    extract_status = Column(
         String(),
+        nullable=True,
+    )
+    extract_started_at = Column(
+        DateTime(),
         nullable=True,
     )
 
@@ -132,6 +207,12 @@ class Pipeline(Base):
         String(),
         nullable=True,
     )
+    transform_started_at = Column(
+        DateTime(),
+        nullable=True,
+    )
+
+    tasks = relationship("Task", back_populates="pipeline")
 
 if __name__ == "__main__":
     Base.metadata.create_all(engine)

@@ -3,7 +3,7 @@ from transform.dedup import Deduplicator
 from load.base import DataWarehouse
 import argparse
 
-def run_transform(target_uri):
+def transform(target_uri):
     db = DataWarehouse(target_uri)
     dedup = Deduplicator(db)
     dedup.create_or_update_deduplicate_view()
@@ -19,4 +19,4 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--target", type=str)
     args, unknown_args = parser.parse_known_args()
-    run_transform(args.target)
+    transform(args.target)
