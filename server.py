@@ -52,8 +52,6 @@ def run_extract_task(pipeline):
     print("Run extract")
     scraper.runner(source_config, pipeline.target.uri, debug=False, memory=pipeline.source, params=pipeline.source.config)
 
-    extract(source_config, pipeline.id)
-
 @record_task(task_type='transform')
 def run_transform_task(pipeline):
     transform(pipeline.target.uri)

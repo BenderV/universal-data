@@ -33,10 +33,18 @@ CACHE_DIR = os.environ['CACHE_DIR']
 class NoResultException(Exception):
     pass
 
+
 class CachedLimiterSession(CacheMixin, LimiterMixin, requests.Session):
     """Session class with caching and rate-limiting behavior. Accepts arguments for both
     LimiterSession and CachedSession.
     """
+
+
+class LimitedSession(LimiterMixin, requests.Session):
+    """Session class with caching and rate-limiting behavior. Accepts arguments for both
+    LimiterSession and CachedSession.
+    """
+
 
 class FileCacheWithPostgres(FileCache):
     def save_response(self, response, cache_key=None, expires=None):
@@ -47,7 +55,8 @@ class FileCacheWithPostgres(FileCache):
 file_cache_backend = FileCacheWithPostgres(
     cache_name=CACHE_DIR,
 )
-class CustomSession(CachedLimiterSession):
+
+class CustomSession(LimitedSession):
     """https://stackoverflow.com/a/51026159"""
 
     def __init__(self, rate_limit=20, prefix_url=None, headers={}, *args, **kwargs):
@@ -77,6 +86,7 @@ class CustomSession(CachedLimiterSession):
         return super(CustomSession, self).request(
             method, *args, **kwargs, verify=False
         )
+
 class File:
     def save_state(self, id, state):
         with open(f"store/state_{id}.json", "w+") as f:
@@ -242,7 +252,6 @@ class List(Strategy):
         results = deep_get(response, self.config.key)
         for result in results:
             self.add_item(result)
-
 
 class Listing(Strategy):
     """Listing with pagination"""
