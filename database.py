@@ -146,8 +146,8 @@ class Task(Base):
 
 @event.listens_for(Task.status, 'set')
 def update_status(target, value, old_value, initiator):
-    _session = object_session(target)
-    if _session is None: return
+    _session = object_session(target) or create_session()
+    # if _session is None: return
     pipeline = _session.query(Pipeline).get(target.pipeline_id)
     if target.type == 'extract':
         pipeline.extract_status = value
