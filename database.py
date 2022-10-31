@@ -6,7 +6,7 @@ from sqlalchemy import (BIGINT, Boolean, Column, Date, DateTime, Float,
                         dialects, event)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import Session, relationship
+from sqlalchemy.orm import Session, object_session, relationship
 from sqlalchemy.orm.attributes import flag_modified
 from datetime import datetime
 
@@ -14,7 +14,11 @@ Base = declarative_base()
 uri = env('DATABASE_URI')
 # https://docs.sqlalchemy.org/en/13/core/pooling.html#dealing-with-disconnects
 engine = create_engine(uri, pool_pre_ping=True)
-session = Session(bind=engine)
+
+def create_session():
+    return Session(bind=engine)
+
+session = create_session()
 
 class STATUS:
     ERROR = 'error'
@@ -142,9 +146,9 @@ class Task(Base):
 
 @event.listens_for(Task.status, 'set')
 def update_status(target, value, old_value, initiator):
-    
-
-    pipeline = session.query(Pipeline).get(target.pipeline_id)
+    _session = object_session(target)
+    if _session is None: return
+    pipeline = _session.query(Pipeline).get(target.pipeline_id)
     if target.type == 'extract':
         pipeline.extract_status = value
         if value == STATUS.RUNNING:
@@ -155,8 +159,7 @@ def update_status(target, value, old_value, initiator):
             pipeline.transform_started_at = datetime.now()
     else:
         raise Exception('task type not recognized')
-
-    
+    _session.commit()
 
 
 
