@@ -20,7 +20,7 @@ routes:
     request:
       url: /jobs
       params:
-        page[size]: 100
+        page[size]: 10
     pagination:
       default: 1
       key: page[number]

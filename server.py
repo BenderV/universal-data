@@ -60,7 +60,9 @@ def run_extract_task(pipeline):
 
     logger.info("Run extract")
     scraper.runner(source_config, pipeline.target.uri, debug=DEBUG, memory=pipeline.source, params=pipeline.source.config)
-    run_transform_task(pipeline)
+    # Start transform status to queued
+    pipeline.transform_status = STATUS.QUEUED
+    session.commit()
 
 @record_task(task_type='transform')
 def run_transform_task(pipeline):
@@ -74,7 +76,6 @@ def run_transforms():
         logger.info(f"{len(pipelines)} tranform to run")
 
     for pipeline in pipelines:
-        # run_transform_task(pipeline)
         threading.Thread(target=run_transform_task, args=(pipeline,)).start()
 
 def run_extracts():
