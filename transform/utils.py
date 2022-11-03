@@ -1,19 +1,44 @@
 from collections import defaultdict
 from concurrent.futures import process
 from typing import Dict, Optional
+
+import pandas as pd
+import sqlalchemy as sa
 import yaml
 from genson import SchemaBuilder
 from load.base import DataWarehouse, Entity
 from sqlalchemy import dialects
-import sqlalchemy as sa
+from sqlalchemy.inspection import inspect
 
-def generate_jsonschema(rows):
+
+def generate_jsonschema(rows, schema=None):
     """Unused for now."""
     builder = SchemaBuilder()
+    if schema is not None:
+        builder.add_schema(schema)
     for row in rows:
         builder.add_object(row)
     return builder.to_schema()
-from collections import defaultdict
+
+
+POSTGRES_TYPES = {
+    'array': 'jsonb',
+    'boolean': 'boolean',
+    'object': 'jsonb',
+    'string': 'text',
+    'integer': 'numeric'
+}
+
+def extract_type_from_df(df):
+    dtypes_dict = {
+        column: dialects.postgresql.JSONB
+        for column in df.columns
+        if any(
+            isinstance(df.iloc[row][column], dict) or isinstance(df.iloc[row][column], list)
+            for row in range(0, len(df))
+        )
+    }
+    return dtypes_dict
 
 
 def airtable_unnest_tables(rows):
@@ -62,3 +87,159 @@ def create_upsert_method(meta: sa.MetaData, extra_update_fields: Optional[Dict[s
         conn.execute(upsert_stmt)
 
     return method
+
+
+class Transformer:
+    """
+    def process_row(input_):
+        pass
+
+    transformer = Transformer(
+        engine = engine,
+        input_table = "public.__ud_dedup",
+        output_table = "public.__ud_normalized",
+        transform = process_row
+    )
+
+    transformer.run()
+    """
+
+    schema = 'public'
+    chunk_size = 1000
+    output_table_schema = None
+
+    def __init__(self, engine: sa.engine.Engine, output_table: str, transform: callable, input_table: str = None, input_sql: str = None, primary_key=None):
+        self.engine = engine
+        if input_sql and input_table:
+            raise ValueError("Only one of input_sql and input_table can be set")
+        self.input_table = input_table
+        self.input_sql = input_sql or f"SELECT * FROM {input_table}"
+        self.primary_key = primary_key
+    
+        self.output_table = output_table
+        self.transform = transform
+        self.meta = sa.MetaData(self.engine)
+
+    def _extract_primary_keys(self, table_name):
+        table = sa.Table(table_name, self.meta, autoload=True, autoload_with=self.engine)
+        return [key.name for key in table.primary_key]
+
+    def _get_primary_key(self):
+        if not self.primary_key:
+            primary_keys = self._extract_primary_keys(self.input_table)
+            if len(primary_keys) > 1:
+                raise Exception("Only support single primary key")
+            self.primary_key = primary_keys[0]
+        
+        return self.primary_key
+
+    def _output_table_exist(self):
+        insp = sa.inspect(self.engine)
+        table_exist = insp.has_table(self.output_table, schema=self.schema)
+        return table_exist
+
+    def _create_table(self):
+        schema = self.output_table_schema
+        
+        columns = []
+        for col_name, value in schema['properties'].items():
+            if "type" not in value:
+                if "anyOf" in value:
+                    col_type = POSTGRES_TYPES['object']
+                else:
+                    raise Exception(f"Type not found for {col_name}")
+            else:
+                if isinstance(value['type'], list):
+                    raise Exception("Array type not supported yet")
+                col_type = POSTGRES_TYPES.get(value['type'])
+                if col_type is None:
+                    if value['type'] == "null":
+                        col_type = "text"   
+                    else:
+                        raise ValueError(f'Unknown type for col {col_name}: {value}')
+                suffix = "PRIMARY KEY" if col_name == self._get_primary_key() else ""
+            columns.append(f'"{col_name}" {col_type} {suffix}')
+
+        columns = ", ".join(columns)
+        
+        query = f"""
+            CREATE TABLE "{self.output_table}" (
+                {columns}
+            )
+        """
+        print(query)
+        self.engine.execute(f"""DROP TABLE IF EXISTS "{self.output_table}";""")
+        self.engine.execute(query)
+
+    def _fetch_rows_to_insert(self, limit=None):
+        self._get_primary_key()
+
+        query_filter = f"""
+            AND "{self.primary_key}" NOT IN (
+                SELECT __key
+                FROM "{self.output_table}"
+            )
+        """ if self._output_table_exist() else ""
+        
+        query = f"""
+            SELECT *
+            FROM (
+                {self.input_sql}
+            ) AS t
+            WHERE True
+            {query_filter}
+            LIMIT {self.chunk_size if limit is None else limit}
+        """
+        rows_raw = self.engine.execute(query).all()
+        rows = [{
+            '__key': row[self.primary_key],
+            # '__created_at': row.created_at.isoformat(),
+            # '__updated_at': row.updated_at.isoformat(),
+            **self.transform(dict(row))
+        } for row in rows_raw]
+        return rows
+
+    def _update_json_schema(self, rows):
+        schema = generate_jsonschema(rows, self.output_table_schema)
+        self.output_table_schema = schema
+        return schema
+
+    def _insert_data(self, rows):
+        print(f'insert_data {self.output_table}: {len(rows)} rows')
+        df = pd.DataFrame(rows)
+        meta = sa.MetaData(self.engine)
+        upsert_method = create_upsert_method(meta)
+
+        try:
+            df.to_sql(
+                self.output_table,
+                self.engine,
+                schema=self.schema,
+                index=False,
+                if_exists="append",
+                chunksize=self.chunk_size,
+                method=upsert_method,
+                dtype=extract_type_from_df(df)
+            )
+        except (sa.exc.ProgrammingError, sa.exc.CompileError):
+            self._update_json_schema(rows)
+            self._create_table()
+        except Exception as eee:
+            # if 'CompileError' in str(eee):
+            self._update_json_schema(rows)
+            self._create_table()
+            
+    def run(self):
+        rows = self._fetch_rows_to_insert()
+        table_exist = self._output_table_exist()
+        if not table_exist:
+            self._update_json_schema(rows)
+            self._create_table()
+        
+    
+        self._insert_data(rows)
+        while True:
+            rows = self._fetch_rows_to_insert()
+            if not rows:
+                break
+            self._insert_data(rows)

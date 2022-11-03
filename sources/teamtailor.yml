@@ -1,0 +1,27 @@
+id: teamtailor
+host: https://api.teamtailor.com/v1
+params:
+  api_key: { type: string }
+headers:
+  Authorization: Token token={api_key}
+  X-Api-Version: "20210218"
+entities:
+  jobs:
+    - id
+routes:
+  - id: jobs
+    name: Jobs
+    entity: jobs
+    format: json
+    type: Listing
+    key: data
+    primary_key: id
+    method: GET
+    request:
+      url: /jobs
+      params:
+        page[size]: 100
+    pagination:
+      default: 1
+      key: page[number]
+      type: params

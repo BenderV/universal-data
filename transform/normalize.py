@@ -3,141 +3,83 @@ from enum import Enum
 import pandas as pd
 import sqlalchemy as sa
 from sqlalchemy import dialects
-from transform.utils import generate_jsonschema, create_upsert_method, airtable_unnest_tables
 
-POSTGRES_TYPES = {
-    'array': 'jsonb',
-    'boolean': 'boolean',
-    'object': 'jsonb',
-    'string': 'text',
-}
+from transform.utils import Transformer
 
-def extract_type_from_df(df):
-    dtypes_dict = {
-        column: dialects.postgresql.JSONB
-        for column in df.columns
-        if any(
-            isinstance(df.iloc[row][column], dict) or isinstance(df.iloc[row][column], list)
-            for row in range(0, len(df))
-        )
-    }
-    return dtypes_dict
 
 class EntityNormalization:
-    schema = 'public'
-    chunk_size = 1000
-
     def __init__(self, database, source_id, entity):
         self.db = database
         self.source_id = source_id
         self.entity = entity
-        self.table_name = f"_raw_{source_id}_{entity}" # target table name
 
-    def _table_exist(self):
-        insp = sa.inspect(self.db.engine)
-        table_exist = insp.has_table(self.table_name, schema=self.schema)
-        return table_exist
-
-    def _fetch_rows_to_insert(self, limit=None):
-        query_filter = f"""
-            AND __key NOT IN (
-                SELECT __key
-                FROM {self.table_name}
-            )
-        """ if self._table_exist() else ""
-        
-        query = f"""
+    def normalize(self):
+        input_sql = f"""
             SELECT *
             FROM __ud_dedup
-            WHERE True
-            {query_filter}
-            AND source_id = '{self.source_id}'
+            WHERE source_id = '{self.source_id}'
             AND entity = '{self.entity}'
-            LIMIT {self.chunk_size if limit is None else limit}
         """
-        rows_raw = self.db.engine.execute(query).all()
-        rows = [{
-            '__key': row['__key'],
-            '__created_at': row.created_at.isoformat(),
-            **row.data
-        } for row in rows_raw]
-        return rows
 
-    def create_table(self, schema):
-        keys = schema['properties'].keys()
-        
-        columns = []
-        for col_name, value in schema['properties'].items():
-            col_type = POSTGRES_TYPES.get(value['type'])
-            suffix = "PRIMARY KEY" if col_name == '__key' else ""
-            columns.append(f'"{col_name}" {col_type} {suffix}')
-
-        columns = ", ".join(columns)
-        
-        query = f"""
-            CREATE TABLE {self.table_name} (
-                {columns}
-            )
-        """
-        print(query)
-        self.db.engine.execute(f"DROP TABLE IF EXISTS {self.table_name}")
-        self.db.engine.execute(query)
-    
-    def insert_data(self, rows):
-        print(f'insert_data: {len(rows)} rows')
-        df = pd.DataFrame(rows)
-        meta = sa.MetaData(self.db.engine)
-        upsert_method = create_upsert_method(meta)
-            
-        df.to_sql(
-          self.table_name,
-          self.db.engine,
-          schema=self.schema,
-          index=False,
-          if_exists="append",
-          chunksize=self.chunk_size,
-          method=upsert_method,
-          dtype=extract_type_from_df(df)
+        transformer = Transformer(
+            engine = self.db.engine,
+            input_sql = input_sql,
+            primary_key = '__key',
+            output_table = f"_raw_{self.source_id}_{self.entity}",
+            transform = lambda row: row["data"]
         )
-      
-    def normalize(self):
-        rows = self._fetch_rows_to_insert()
-        
-        insp = sa.inspect(self.db.engine)
-        table_exist = insp.has_table(self.table_name, schema=self.schema)
-        if not table_exist:
-            schema = generate_jsonschema(rows)
-            self.create_table(schema)
-        
-        self.insert_data(rows)
-        while True:
-            rows = self._fetch_rows_to_insert()
-            if not rows:
-                break
-            self.insert_data(rows)
 
-        # Hack ...
+        transformer.run()
+    
+        # # Hack ...
         if self.source_id == 'airtable' and self.entity == 'tables_records':
             print(f"Hack airtable")
-            query = f"""
-                SELECT *
-                FROM {self.table_name}
-            """
-            rows_raw = self.db.engine.execute(query).all()
-            rows = [dict(r) for r in rows_raw]
-            tables = airtable_unnest_tables(rows)
-            for table, rows in tables.items():
-                print(f"Update table: {table} with {len(rows)}")
-                df = pd.DataFrame(rows)
-                df.to_sql(
-                    table,
-                    self.db.engine,
-                    schema=self.schema,
-                    index=False,
-                    if_exists="replace",
-                    chunksize=self.chunk_size,
-                    dtype=extract_type_from_df(df)
+            def process_row(row):
+                fields = row["fields"]
+                # TODO: Need to move this to utils.Transformer
+                # 59 for Postgres, 300 for Snowflake / BigQuery
+                fields_with_name_length = {k[:59]: v for k, v in fields.items()}
+    
+                return {
+                    "id": row["id"],
+                    **fields_with_name_length,
+                }
+
+            query = """SELECT DISTINCT "tableName" FROM _raw_airtable_tables_records"""
+            rows = self.db.engine.execute(query).all()
+            for row in rows:
+                transformer = Transformer(
+                    engine = self.db.engine,
+                    input_sql = f"""
+                        SELECT *
+                        FROM _raw_airtable_tables_records
+                        WHERE "tableName" = '{row.tableName}'
+                    """,
+                    primary_key = 'id',
+                    output_table = row.tableName,
+                    transform = process_row
                 )
+                transformer.run()        
+            
+        if self.source_id == 'teamtailor':
+            def process_row(row):
+                links = row.get('links', {})
+                del links['self']
+                return {
+                    "id": row["id"],
+                    **row["attributes"],
+                    **links
+                }
+
+            transformer = Transformer(
+                engine = self.db.engine,
+                input_table = f"_raw_teamtailor_{self.entity}",
+                output_table = f"teamtailor_{self.entity}",
+                transform = process_row
+            )
+            
+            transformer.run()
+            
 
 if __name__ == "__main__":
     db = EntityNormalization(uri="postgresql://localhost:5432/biolook")

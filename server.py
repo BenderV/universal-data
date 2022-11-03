@@ -1,17 +1,16 @@
-import time
-
+import os
 import threading
-import random
+import time
+from datetime import datetime
 
 import schedule
 import yaml
-import functools
 
-from database import Pipeline, session, Task, STATUS
+from database import STATUS, Pipeline, Task, session
 from extract import scraper
 from run_transform import transform
-from datetime import datetime
 
+DEBUG = os.environ.get('DEBUG', False)
 
 def record_task(task_type):
     def decorator(func):
@@ -50,7 +49,8 @@ def run_extract_task(pipeline):
         source_config = yaml.safe_load(f)
 
     print("Run extract")
-    scraper.runner(source_config, pipeline.target.uri, debug=False, memory=pipeline.source, params=pipeline.source.config)
+    scraper.runner(source_config, pipeline.target.uri, debug=DEBUG, memory=pipeline.source, params=pipeline.source.config)
+    run_transform_task(pipeline)
 
 @record_task(task_type='transform')
 def run_transform_task(pipeline):
@@ -58,13 +58,8 @@ def run_transform_task(pipeline):
 
 
 def run_transforms():
-    # Check if a pipeline is already running
-    pipeline = session.query(Pipeline).filter_by(transform_status=STATUS.RUNNING).first()
-    if pipeline is not None:
-        return
-
-    # If not, we look in the queue for a pipeline to run
-    pipelines = session.query(Pipeline).filter_by(active=True,transform_status=STATUS.QUEUED).all()
+    # We look in the queue for a pipeline to run
+    pipelines = session.query(Pipeline).filter_by(active=True, transform_status=STATUS.QUEUED).all()
     if pipelines:
         print(f"{len(pipelines)} tranform to run")
 
@@ -73,12 +68,7 @@ def run_transforms():
         threading.Thread(target=run_transform_task, args=(pipeline,)).start()
 
 def run_extracts():
-    # Check if a pipeline is already running
-    running_pipeline = session.query(Pipeline).filter_by(extract_status=STATUS.RUNNING).first()
-    if running_pipeline is not None:
-        return
-
-    # If not, we look in the queue for a pipeline to run
+    # We look in the queue for a pipeline to run
     pipelines = session.query(Pipeline).filter_by(active=True, extract_status=STATUS.QUEUED).all()
     if pipelines:
         print(f"{len(pipelines)} to run")
