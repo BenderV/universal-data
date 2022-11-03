@@ -1,3 +1,4 @@
+from loguru import logger
 from sqlalchemy import (Boolean, Column, DateTime, Integer, String,
                         create_engine)
 from sqlalchemy.dialects.postgresql import JSONB
@@ -9,6 +10,7 @@ Base = declarative_base()
 
 class Entity(Base):
     __tablename__ = "__ud_entities"
+
     id = Column(
         Integer(),
         nullable=False,
@@ -34,7 +36,9 @@ class DataWarehouse:
         Base.metadata.create_all(self.engine)
         self.session = Session(bind=self.engine)
 
-    def load(self, source_id, entity, item):
-        schema = Entity(source_id=source_id, entity=entity, data=item)
-        self.session.add(schema)
+    def load(self, source_id, entity, items):
+        logger.debug(f"Saving {len(items)} {entity} from {source_id}")
+        for item in items:
+            schema = Entity(source_id=source_id, entity=entity, data=item)
+            self.session.add(schema)
         self.session.commit()

@@ -1,16 +1,25 @@
 import os
+import sys
 import threading
 import time
 from datetime import datetime
 
 import schedule
 import yaml
+from loguru import logger
 
 from database import STATUS, Pipeline, Task, session
 from extract import scraper
 from run_transform import transform
 
 DEBUG = os.environ.get('DEBUG', False)
+
+logger.debug(f"DEBUG Model: {DEBUG}")
+
+if DEBUG:
+    logger.add(sys.stdout, format="{time} {level} {message}", filter="my_module", level="INFO", backtrace=True, diagnose=True)
+else:
+    logger.add(sys.stdout, serialize=True, filter="my_module")
 
 def record_task(task_type):
     def decorator(func):
@@ -32,6 +41,7 @@ def record_task(task_type):
                 value = func(pipeline=pipeline)
                 task.status = STATUS.DONE
             except (Exception, KeyboardInterrupt) as e:
+                logger.exception("Error in task")
                 task.status = STATUS.ERROR
                 task.error_log = type(e).__name__ + '\n' + str(e)
             finally:
@@ -48,7 +58,7 @@ def run_extract_task(pipeline):
     with open(f'sources/{source_name}.yml') as f:
         source_config = yaml.safe_load(f)
 
-    print("Run extract")
+    logger.info("Run extract")
     scraper.runner(source_config, pipeline.target.uri, debug=DEBUG, memory=pipeline.source, params=pipeline.source.config)
     run_transform_task(pipeline)
 
@@ -61,7 +71,7 @@ def run_transforms():
     # We look in the queue for a pipeline to run
     pipelines = session.query(Pipeline).filter_by(active=True, transform_status=STATUS.QUEUED).all()
     if pipelines:
-        print(f"{len(pipelines)} tranform to run")
+        logger.info(f"{len(pipelines)} tranform to run")
 
     for pipeline in pipelines:
         # run_transform_task(pipeline)
@@ -71,7 +81,7 @@ def run_extracts():
     # We look in the queue for a pipeline to run
     pipelines = session.query(Pipeline).filter_by(active=True, extract_status=STATUS.QUEUED).all()
     if pipelines:
-        print(f"{len(pipelines)} to run")
+        logger.info(f"extract pipeline to run: {len(pipelines)}")
     for pipeline in pipelines:
         threading.Thread(target=run_extract_task, args=(pipeline,)).start()
   
@@ -88,7 +98,8 @@ if __name__ == "__main__":
     schedule.every().day.at("22:30").do(add_pipelines_to_queue)
 
     while True:
+        logger.info("Pulse")
         run_extracts()
         run_transforms()
         schedule.run_pending()
-        time.sleep(1)
+        time.sleep(10)

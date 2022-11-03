@@ -6,6 +6,7 @@ from datetime import datetime
 
 import urllib3
 from load.base import DataWarehouse
+from loguru import logger
 
 from extract.parser import atom_parse
 from extract.utils import (PropertyTree, apply_nested, deep_get,
@@ -17,7 +18,6 @@ import urllib.parse
 import backoff
 import requests
 from dotenv import load_dotenv
-from pyrate_limiter import Duration, RequestRate
 from requests_cache import CacheMixin
 from requests_cache.backends.filesystem import FileCache
 from requests_ratelimiter import LimiterMixin
@@ -48,7 +48,7 @@ class LimitedSession(LimiterMixin, requests.Session):
 
 class FileCacheWithPostgres(FileCache):
     def save_response(self, response, cache_key=None, expires=None):
-        print("cache_key", cache_key)
+        logger.debug("cache_key", cache_key)
         super().save_response(response, cache_key, expires)
     
 
@@ -59,7 +59,7 @@ file_cache_backend = FileCacheWithPostgres(
 class CustomSession(LimitedSession):
     """https://stackoverflow.com/a/51026159"""
 
-    def __init__(self, rate_limit=20, prefix_url=None, headers={}, *args, **kwargs):
+    def __init__(self, rate_limit=5, prefix_url=None, headers={}, *args, **kwargs):
         super().__init__(
             per_second=rate_limit, # 100 requests per second max
             cache_name=CACHE_DIR,
@@ -103,7 +103,6 @@ class File:
 class Crawler:
     def __init__(self, config, debug=False, loader=lambda x: x, memory=File):
         self.debug = debug
-        self.items = defaultdict(list)  # FETCHED
         self.config = config
         self.session = CustomSession(
             rate_limit=config.select('rate_limit', 20),
@@ -117,6 +116,7 @@ class Crawler:
         logger.debug(f"crawler host: {config.host}")
 
     def run(self):
+        logger.info(f'Start crawling {self.config.id}')
         # Take all routes from config and run them
 
         for retriever in self.retrievers:
@@ -148,11 +148,11 @@ class Crawler:
         #    line = json.dumps(item)
         #    f.write(line + "\n")
 
-    def add_item(self, entity, item):
-        self.export_item(entity, item)
-        self.items[entity].append(item)
-        for retriever in self.retrievers:
-            retriever.check_item(entity, item)
+    def add_items(self, entity, items):
+        self.loader.load(self.config.id, entity, items)
+        for item in items:
+            for retriever in self.retrievers:
+                retriever.check_item(entity, item)
 
 
 # Create class retriever / route design / ... ?
@@ -190,9 +190,10 @@ class Strategy:
 
                 self._start()
 
-    def add_item(self, item):
-        item.update(self.params)
-        self.crawler.add_item(self.config.entity, item)
+    def add_items(self, items):
+        for item in items:
+            item.update(self.params)
+        self.crawler.add_items(self.config.entity, items)
 
     def _fetch(self, **attributes):
         method = getattr(
@@ -225,7 +226,7 @@ class Looping(Strategy):
             url = self.config.request.url.format(value)
             result = self._fetch(url=url)
 
-            self.add_item(result)
+            self.add_items([result])
 
     def _fetch_value(self, data, path):
         """TODO"""
@@ -241,7 +242,7 @@ class DirectFetch(Strategy):
     def _start(self):
         url = self.config.request.url
         result = self._fetch(url=url)
-        self.add_item(result)
+        self.add_items([result])
 
 
 class List(Strategy):
@@ -250,8 +251,7 @@ class List(Strategy):
     def _start(self):
         response = self._fetch(url=self.config.request.url)
         results = deep_get(response, self.config.key)
-        for result in results:
-            self.add_item(result)
+        self.add_items(results)
 
 class Listing(Strategy):
     """Listing with pagination"""
@@ -278,9 +278,8 @@ class Listing(Strategy):
 
         response = self._fetch(**request_attributes)
         results = deep_get(response, self.config.key)
-        for result in results:
-            self.add_item(result)
-
+        self.add_items(results)
+    
         if not results:
             raise NoResultException('No results')
         
@@ -364,6 +363,5 @@ def runner(config: dict, target: str, debug=False, memory=File(), params={}):
         )
     loader = DataWarehouse(target)
     config_tree = dict_to_obj_tree(config)
-    print("Will crawl")
     crawler = Crawler(config_tree, debug=debug, memory=memory, loader=loader)
     crawler.run()

@@ -1,6 +1,8 @@
 import os
+from datetime import datetime
 
 from decouple import config as env
+from loguru import logger
 from sqlalchemy import (BIGINT, Boolean, Column, Date, DateTime, Float,
                         ForeignKey, Integer, Sequence, String, create_engine,
                         dialects, event)
@@ -8,12 +10,13 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import Session, object_session, relationship
 from sqlalchemy.orm.attributes import flag_modified
-from datetime import datetime
 
 Base = declarative_base()
 uri = env('DATABASE_URI')
+
 # https://docs.sqlalchemy.org/en/13/core/pooling.html#dealing-with-disconnects
 engine = create_engine(uri, pool_pre_ping=True)
+logger.debug(f"Connecting to database: {engine.url.host}")
 
 def create_session():
     return Session(bind=engine)
