@@ -7,7 +7,7 @@ import sqlalchemy as sa
 import yaml
 from genson import SchemaBuilder
 from load.base import DataWarehouse, Entity
-from sqlalchemy import dialects
+from sqlalchemy import dialects, text
 from sqlalchemy.inspection import inspect
 
 
@@ -26,7 +26,8 @@ POSTGRES_TYPES = {
     'boolean': 'boolean',
     'object': 'jsonb',
     'string': 'text',
-    'integer': 'numeric'
+    'integer': 'numeric',
+    'number': 'numeric',
 }
 
 def extract_type_from_df(df):
@@ -104,9 +105,8 @@ class Transformer:
     transformer.run()
     """
 
-    schema = 'public'
     chunk_size = 1000
-    output_table_schema = None
+    output_table_jsonschema = None
 
     def __init__(self, engine: sa.engine.Engine, output_table: str, transform: callable, input_table: str = None, input_sql: str = None, primary_key=None):
         self.engine = engine
@@ -135,11 +135,11 @@ class Transformer:
 
     def _output_table_exist(self):
         insp = sa.inspect(self.engine)
-        table_exist = insp.has_table(self.output_table, schema=self.schema)
+        table_exist = insp.has_table(self.output_table)
         return table_exist
 
     def _create_table(self):
-        schema = self.output_table_schema
+        schema = self.output_table_jsonschema
         
         columns = []
         for col_name, value in schema['properties'].items():
@@ -167,9 +167,12 @@ class Transformer:
                 {columns}
             )
         """
-        print(query)
         self.engine.execute(f"""DROP TABLE IF EXISTS "{self.output_table}";""")
-        self.engine.execute(query)
+        print('Drop table')
+        print(query)
+        # Need to escape to avoid % in the query
+        self.engine.execute(text(query))
+        print('Table created')
 
     def _fetch_rows_to_insert(self, limit=None):
         self._get_primary_key()
@@ -200,8 +203,8 @@ class Transformer:
         return rows
 
     def _update_json_schema(self, rows):
-        schema = generate_jsonschema(rows, self.output_table_schema)
-        self.output_table_schema = schema
+        schema = generate_jsonschema(rows, self.output_table_jsonschema)
+        self.output_table_jsonschema = schema
         return schema
 
     def _insert_data(self, rows):
@@ -214,7 +217,6 @@ class Transformer:
             df.to_sql(
                 self.output_table,
                 self.engine,
-                schema=self.schema,
                 index=False,
                 if_exists="append",
                 chunksize=self.chunk_size,
