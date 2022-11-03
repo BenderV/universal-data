@@ -11,3 +11,4 @@ pyyaml==5.4.0
 requests-cache==1.0.0b0
 python-dotenv==0.21.0
 backoff==1.8.0
+loguru==0.6.0
