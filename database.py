@@ -1,5 +1,5 @@
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from decouple import config as env
 from loguru import logger
@@ -217,7 +217,20 @@ class Pipeline(Base):
         nullable=True,
     )
 
+    interval_minutes = Column(
+        Integer(),
+        nullable=True,
+    )
+
     tasks = relationship("Task", back_populates="pipeline")
+
+    def should_start(self):
+        # TODO: check if last task is done
+        # Default to 1 hour
+        default_interval = 60
+        tzinfo = self.extract_started_at.tzinfo
+        return self.extract_started_at + timedelta(minutes=self.interval_minutes or default_interval) < datetime.now().replace(tzinfo=tzinfo)
+  
 
 if __name__ == "__main__":
     Base.metadata.create_all(engine)

@@ -91,15 +91,15 @@ def add_pipelines_to_queue():
         Pipeline.extract_status.not_in([STATUS.QUEUED, STATUS.RUNNING, STATUS.ERROR])
     ).all()
     for pipeline in pipelines:
-        pipeline.extract_status = STATUS.QUEUED
+        if pipeline.should_start():
+            pipeline.extract_status = STATUS.QUEUED
     session.commit()
 
 
 if __name__ == "__main__":
-    schedule.every().day.at("22:30").do(add_pipelines_to_queue)
-
     while True:
         logger.info("Pulse")
+        add_pipelines_to_queue()
         run_extracts()
         run_transforms()
         schedule.run_pending()
