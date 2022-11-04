@@ -285,8 +285,10 @@ class Listing(Strategy):
         
         if hasattr(self.config.pagination, "ref"):
             cursor = deep_get(response, self.config.pagination.ref)
+        elif hasattr(self.config.pagination, "step"):
+            cursor += self.config.pagination.step
         else:
-            cursor = cursor + len(results)  # self.config.pagination.step
+            cursor += len(results)
         
         return cursor
 

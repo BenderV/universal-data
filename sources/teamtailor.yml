@@ -8,6 +8,18 @@ headers:
 entities:
   jobs:
     - id
+  departments:
+    - id
+  jobs:
+    - id
+  locations:
+    - id
+  regions:
+    - id
+  roles:
+    - id
+  users:
+    - id
 routes:
   - id: jobs
     name: Jobs
@@ -22,6 +34,97 @@ routes:
       params:
         page[size]: 10
     pagination:
+      step: 1
+      default: 1
+      key: page[number]
+      type: params
+
+  - id: departments
+    name: Departments
+    entity: departments
+    format: json
+    type: Listing
+    key: data
+    primary_key: id
+    method: GET
+    request:
+      url: /departments
+      params:
+        page[size]: 10
+    pagination:
+      step: 1
+      default: 1
+      key: page[number]
+      type: params
+
+  - id: locations
+    name: Locations
+    entity: locations
+    format: json
+    type: Listing
+    key: data
+    primary_key: id
+    method: GET
+    request:
+      url: /locations
+      params:
+        page[size]: 10
+    pagination:
+      step: 1
+      default: 1
+      key: page[number]
+      type: params
+
+  - id: regions
+    name: Regions
+    entity: regions
+    format: json
+    type: Listing
+    key: data
+    primary_key: id
+    method: GET
+    request:
+      url: /regions
+      params:
+        page[size]: 10
+    pagination:
+      step: 1
+      default: 1
+      key: page[number]
+      type: params
+
+  - id: roles
+    name: Roles
+    entity: roles
+    format: json
+    type: Listing
+    key: data
+    primary_key: id
+    method: GET
+    request:
+      url: /roles
+      params:
+        page[size]: 10
+    pagination:
+      step: 1
+      default: 1
+      key: page[number]
+      type: params
+
+  - id: users
+    name: Users
+    entity: users
+    format: json
+    type: Listing
+    key: data
+    primary_key: id
+    method: GET
+    request:
+      url: /users
+      params:
+        page[size]: 10
+    pagination:
+      step: 1
       default: 1
       key: page[number]
       type: params

@@ -150,7 +150,10 @@ class Transformer:
                     raise Exception(f"Type not found for {col_name}")
             else:
                 if isinstance(value['type'], list):
-                    raise Exception("Array type not supported yet")
+                    if 'null' in value['type'] and len(value['type']) == 2:
+                        value['type'] = [t for t in value['type'] if t != 'null'][0]
+                    else:
+                        raise Exception(f"Array type not supported yet: {col_name} {value['type']}")
                 col_type = POSTGRES_TYPES.get(value['type'])
                 if col_type is None:
                     if value['type'] == "null":
