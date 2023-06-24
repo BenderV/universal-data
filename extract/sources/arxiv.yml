@@ -1,0 +1,26 @@
+id: arxiv
+host: http://export.arxiv.org/api
+entities:
+  articles:
+    - id
+routes:
+  - id: articles
+    name: Articles
+    entity: articles
+    format: atom:1.0
+    type: Listing
+    key: entries
+    primary_key: id
+    method: GET
+    request:
+      url: /query
+      params:
+        max_results: 100 # default
+        search_query: >-
+          cat:cs.CV+OR+cat:cs.LG+OR+cat:cs.CL+OR+cat:cs.AI+OR+cat:cs.NE+OR+cat:cs.RO
+        sortBy: submittedDate
+        sortOrder: ascending
+    pagination:
+      default: 0
+      key: start
+      type: params

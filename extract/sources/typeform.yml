@@ -1,0 +1,66 @@
+id: typeform
+host: https://api.typeform.com
+params:
+  idToken: { type: string }
+headers:
+  Content-Type: application/json
+  Authorization: Bearer {idToken}
+entities:
+  forms:
+    - id
+  forms_definition:
+    - id
+  responses:
+    - id
+routes:
+  - id: forms
+    name: Forms
+    entity: forms
+    format: json
+    type: Listing
+    key: items
+    method: GET
+    request:
+      url: /forms
+      params:
+        page_size: 200
+        sort_by: created_at
+        order_by: asc
+    pagination:
+      stop_func: response['page_count'] == cursor
+      default: 1
+      step: 1
+      key: page
+      type: params
+  - id: forms_definition
+    name: Forms Definition
+    entity: forms_definition
+    format: json
+    type: DirectFetch
+    method: GET
+    request:
+      url: /forms/{id}
+    dependencies:
+      - key: id
+        entity: forms
+        entity_key: id
+  - id: responses
+    name: Responses
+    entity: responses
+    format: json
+    type: List
+    key: items
+    method: GET
+    request:
+      url: /forms/{id}/responses
+      params:
+        page_size: 1000
+        sort_by: submitted_at
+        order_by: asc
+    dependencies:
+      - key: id
+        entity: forms
+        entity_key: id
+    pagination:
+      ref_func: response['items'][-1].response_id
+      key: after

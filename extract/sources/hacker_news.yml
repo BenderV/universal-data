@@ -1,0 +1,27 @@
+# HN sent null some times... ?
+
+host: https://hacker-news.firebaseio.com/v0
+
+routes: # should be routes or retriever... ?
+  - id: item
+    name: Item
+    entity: item
+    format: json
+    type: Looping
+    request:
+      url: /item/{0}.json
+    max_value:
+      type: Int
+      url: /maxitem.json
+      key_path: null # direct
+  - id: user
+    name: User
+    entity: user
+    format: json
+    type: DirectFetch
+    request:
+      url: /user/{id}.json
+    dependencies:
+      - key: id
+        entity: item
+        entity_key: by

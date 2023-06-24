@@ -1,0 +1,45 @@
+# Airtable represent their data with tables, tables_records
+# but user want the view of their data base
+
+id: airtable
+host: https://api.airtable.com/v0
+params:
+  baseId: { type: string } # add how to verify it ?
+  idToken: { type: string }
+headers:
+  Content-Type: application/json
+  Authorization: Bearer {idToken}
+entities:
+  tables:
+    - id
+  tables_records:
+    - id
+routes: # should be routes
+  - id: tables
+    name: Tables
+    entity: tables
+    format: json
+    type: List
+    key: tables
+    primary_key: idprimaryFieldId
+    method: GET
+    request:
+      url: /meta/bases/{baseId}/tables # need to have config variable...
+  - id: tables_records
+    name: Tables Records
+    entity: tables_records
+    format: json
+    type: Listing
+    key: records
+    primary_key: id
+    method: GET
+    request:
+      url: /{baseId}/{tableName}
+    pagination:
+      ref: offset
+      key: offset
+      type: params
+    dependencies:
+      - key: tableName
+        entity: tables
+        entity_key: name
